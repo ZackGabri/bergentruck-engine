@@ -4,6 +4,7 @@ use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use shakmaty::{Chess, Move, MoveList, Position};
 
+use crate::engine_options;
 use crate::history::MoveHistory;
 use crate::search::{MATE_SCORE, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
@@ -97,6 +98,11 @@ pub struct Negamax {
 
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
+
+    fp_depth: usize,
+    fp_multiplier: usize,
+    fp_base: usize,
+    fp_moves: usize,
 }
 
 impl Negamax {
@@ -110,6 +116,11 @@ impl Negamax {
 
             max_hard_nodes: None,
             hard_deadline: None,
+
+            fp_depth: engine_options().get_number("FutilityDepth"),
+            fp_multiplier: engine_options().get_number("FutilityMarginPerDepth"),
+            fp_base: engine_options().get_number("FutilityMarginBase"),
+            fp_moves: engine_options().get_number("FutilityMoves"),
         }
     }
 
@@ -255,14 +266,18 @@ impl Negamax {
             let is_killer = self.killer_move_table[ply].contains_move(mov);
 
             // Move loop pruning
-            if !is_root && !pv_node && is_quiet && !is_mate {
+            if !is_root
+                && !pv_node
+                && !is_check
+                && is_quiet
+                && max.abs() < crate::search::MATE_THRESHOLD
+            {
                 // Futility pruning
-                /*
-                if depth <= 3 && move_index >= 4 {
+                if depth <= self.fp_depth && move_index >= self.fp_moves {
                     let static_eval = static_eval.get_or_insert(self.static_eval(position));
 
                     // Discard moves with no potential to raise alpha
-                    if *static_eval + 200 * depth as i32 <= alpha {
+                    if *static_eval + (self.fp_base + self.fp_multiplier * depth) as i32 <= alpha {
                         continue;
                     }
                 }
