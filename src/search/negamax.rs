@@ -270,7 +270,8 @@ impl Negamax {
                 && !pv_node
                 && !is_check
                 && is_quiet
-                && max.abs() < crate::search::MATE_THRESHOLD
+                && !is_killer
+                && !is_mate
             {
                 // Futility pruning
                 if depth <= self.fp_depth && move_index >= self.fp_moves {
@@ -281,12 +282,9 @@ impl Negamax {
                         continue;
                     }
                 }
-                */
 
                 // Late move pruning
-                if !is_check
-                    && !is_killer
-                    && move_index >= 5 + 4 * depth * depth {
+                if move_index >= 5 + 4 * depth * depth {
                     continue;
                 }
                 
