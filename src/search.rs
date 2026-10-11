@@ -142,7 +142,7 @@ pub fn search(
                 continue;
             }
             if score >= beta {
-                pv = iter_pv; // fail high still has vaild best move
+                // pv = iter_pv; // fail high still has vaild best move
                 beta = std::cmp::min(MATE_SCORE, beta + delta);
                 delta += delta / 2;
                 FAIL_HIGHS.fetch_add(1, Ordering::Relaxed);
