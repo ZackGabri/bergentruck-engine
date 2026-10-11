@@ -257,6 +257,7 @@ impl Negamax {
             // Move loop pruning
             if !is_root && !pv_node && is_quiet && !is_mate {
                 // Futility pruning
+                /*
                 if depth <= 3 && move_index >= 4 {
                     let static_eval = static_eval.get_or_insert(self.static_eval(position));
 
@@ -265,6 +266,7 @@ impl Negamax {
                         continue;
                     }
                 }
+                */
 
                 // Late move pruning
                 if !is_check
@@ -272,6 +274,7 @@ impl Negamax {
                     && move_index >= 5 + 4 * depth * depth {
                     continue;
                 }
+                
             }
 
             let mut position = position.clone();
