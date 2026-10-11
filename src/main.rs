@@ -124,8 +124,13 @@ fn main() -> Result<(), anyhow::Error> {
             },
 
             ["go", "movetime", val] => {
+                // Fixed time per move, set both hard and soft deadlines to the same value
                 let search_options = SearchOptions {
-                    deadline: val
+                    hard_deadline: val
+                        .parse()
+                        .map(|val| minstant::Instant::now() + Duration::from_millis(val))
+                        .ok(),
+                    soft_deadline: val
                         .parse()
                         .map(|val| minstant::Instant::now() + Duration::from_millis(val))
                         .ok(),
@@ -142,11 +147,19 @@ fn main() -> Result<(), anyhow::Error> {
 
                 let mut time = search::TimeControl::default();
                 let mut max_depth = None;
-                let mut max_nodes = None;
+                let mut max_soft_nodes = None;
+                let mut max_hard_nodes = None;
 
                 for arg in search_args {
                     match arg {
-                        ["nodes", nodes] => max_nodes = nodes.parse().ok(),
+                        ["nodes", nodes] => {
+                            // By default go nodes <> is soft nodes
+                            // We set hard modes as double as a cap
+                            if let Ok(nodes) = nodes.parse::<u64>() {
+                                max_soft_nodes = Some(nodes);
+                                max_hard_nodes = Some(nodes * 2);
+                            }
+                        },
                         ["depth", depth] => max_depth = depth.parse().ok(),
 
                         ["wtime", wtime] => time.w_time = wtime.parse().unwrap_or_default(),
@@ -158,13 +171,18 @@ fn main() -> Result<(), anyhow::Error> {
                 }
 
                 let search_options = SearchOptions {
-                    deadline: time.into_deadline(
+                    soft_deadline: time.into_soft_deadline(
                         start_time,
                         pos.turn(),
                         pos.fullmoves().get() as u64,
                     ),
+                    hard_deadline: time.into_hard_deadline(
+                        start_time,
+                        pos.turn(),
+                    ),
                     max_depth,
-                    max_nodes,
+                    max_soft_nodes: max_soft_nodes,
+                    max_hard_nodes: max_hard_nodes,
                     ..Default::default()
                 };
 
