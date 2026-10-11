@@ -252,7 +252,7 @@ impl Negamax {
 
             let is_mate = max.abs() >= crate::search::MATE_THRESHOLD;
             let is_quiet = !mov.is_capture() && !mov.is_promotion();
-            let is_killer = self.killer_move_table[ply].contains_move(mov);            
+            let is_killer = self.killer_move_table[ply].contains_move(mov);
 
             // Move loop pruning
             if !is_root && !pv_node && is_quiet && !is_mate {
@@ -269,12 +269,9 @@ impl Negamax {
                 */
 
                 // Late move pruning
-                if !is_check
-                    && !is_killer
-                    && move_index >= 5 + 4 * depth * depth {
+                if !is_check && !is_killer && move_index >= 5 + 4 * depth * depth {
                     continue;
                 }
-                
             }
 
             let mut position = position.clone();
@@ -288,7 +285,6 @@ impl Negamax {
             // Principal variation search (PVS)
             // If we are in a non-PV node, OR we are in a PV-node examining moves after the 1st legal move
             if !pv_node || move_index > 0 {
-
                 // Late move reductions (LMR)
                 let lmr_conditions = !is_check
                     && depth >= 3
@@ -407,17 +403,17 @@ impl Negamax {
 
     pub fn has_reached_limit(&self) -> bool {
         // Check node limit
-        if let Some(hard_nodes) = self.max_hard_nodes {
-            if self.node_count >= hard_nodes {
-                return true;
-            }
+        if let Some(hard_nodes) = self.max_hard_nodes
+            && self.node_count >= hard_nodes
+        {
+            return true;
         }
 
         // Check deadline
-        if let Some(hard_deadline) = self.hard_deadline {
-            if minstant::Instant::now() > hard_deadline {
-                return true;
-            }
+        if let Some(hard_deadline) = self.hard_deadline
+            && minstant::Instant::now() >= hard_deadline
+        {
+            return true;
         }
 
         false

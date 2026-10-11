@@ -75,7 +75,7 @@ pub fn search(
     let mut negamax = Negamax::new();
     negamax.max_hard_nodes = max_hard_nodes;
     negamax.hard_deadline = hard_deadline;
-    
+
     let max_depth = max_depth.unwrap_or_else(|| {
         if max_hard_nodes.is_some() || hard_deadline.is_some() {
             100
@@ -96,7 +96,6 @@ pub fn search(
         (limit_ms, false)
     };
 
-
     let mut default_history = MoveHistory::default();
     let history = history.unwrap_or(&mut default_history);
 
@@ -110,7 +109,6 @@ pub fn search(
 
     let mut pv = PVariation::default();
     while depth <= max_depth {
-
         let mut search_progress = if is_node_search {
             negamax.node_count
         } else {
@@ -118,8 +116,7 @@ pub fn search(
         };
 
         // Check soft / hard limits
-        if (search_progress >= search_limit || negamax.has_reached_limit()) 
-            && depth > 1 {
+        if (search_progress >= search_limit || negamax.has_reached_limit()) && depth > 1 {
             break;
         }
 
@@ -172,8 +169,7 @@ pub fn search(
         };
 
         // Check soft / hard limits
-        if (search_progress >= search_limit || negamax.has_reached_limit()) 
-            && depth > 1 {
+        if (search_progress >= search_limit || negamax.has_reached_limit()) && depth > 1 {
             break;
         }
 
@@ -199,12 +195,14 @@ pub struct TimeControl {
 }
 
 impl TimeControl {
-    pub fn into_soft_deadline(
+    pub fn soft_deadline(
         &self,
         start_time: minstant::Instant,
-        turn: Color,
-        played_moves: u64,
+        position: &Chess,
     ) -> Option<minstant::Instant> {
+        let turn = position.turn();
+        let played_moves = position.fullmoves().get() as u64;
+
         let divisor = 30.max(60_u64.saturating_sub(played_moves));
 
         let duration = match turn {
@@ -220,11 +218,12 @@ impl TimeControl {
         }
     }
 
-    pub fn into_hard_deadline(
+    pub fn hard_deadline(
         &self,
         start_time: minstant::Instant,
-        turn: Color,
+        position: &Chess,
     ) -> Option<minstant::Instant> {
+        let turn = position.turn();
         let duration = match turn {
             Color::Black if self.b_time > 0 => (self.b_time / 10) + self.b_inc,
             Color::White if self.w_time > 0 => (self.w_time / 10) + self.w_inc,

@@ -159,7 +159,7 @@ fn main() -> Result<(), anyhow::Error> {
                                 max_soft_nodes = Some(nodes);
                                 max_hard_nodes = Some(nodes * 2);
                             }
-                        },
+                        }
                         ["depth", depth] => max_depth = depth.parse().ok(),
 
                         ["wtime", wtime] => time.w_time = wtime.parse().unwrap_or_default(),
@@ -171,18 +171,11 @@ fn main() -> Result<(), anyhow::Error> {
                 }
 
                 let search_options = SearchOptions {
-                    soft_deadline: time.into_soft_deadline(
-                        start_time,
-                        pos.turn(),
-                        pos.fullmoves().get() as u64,
-                    ),
-                    hard_deadline: time.into_hard_deadline(
-                        start_time,
-                        pos.turn(),
-                    ),
+                    soft_deadline: time.soft_deadline(start_time, &pos),
+                    hard_deadline: time.hard_deadline(start_time, &pos),
                     max_depth,
-                    max_soft_nodes: max_soft_nodes,
-                    max_hard_nodes: max_hard_nodes,
+                    max_soft_nodes,
+                    max_hard_nodes,
                     ..Default::default()
                 };
 
