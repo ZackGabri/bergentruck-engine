@@ -104,7 +104,7 @@ pub fn bench() -> anyhow::Result<()> {
     }
 
     let bench_duration = bench_start.elapsed().as_millis();
-    let nps = total_nodes * 1000 / bench_duration as usize;
+    let nps = total_nodes * 1000 / bench_duration as u64;
     println!("--------------------------------");
     println!("Total bench duration: {bench_duration}ms");
 

@@ -88,14 +88,15 @@ fn get_lmr_table() -> &'static [[usize; MAX_PSUEDO_MOVES]; MAX_PLY] {
 
 // struct for shared data between every negamax call
 pub struct Negamax {
-    pub node_count: usize,
+    pub node_count: u64,
     history_table: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
 
     #[allow(unused)]
     rng: SmallRng,
 
-    pub deadline: Option<minstant::Instant>, // deadline for the search to stop at
+    pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
+    pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
 }
 
 impl Negamax {
@@ -107,7 +108,8 @@ impl Negamax {
 
             rng: SmallRng::from_seed([0; 32]),
 
-            deadline: None,
+            max_hard_nodes: None,
+            hard_deadline: None,
         }
     }
 
@@ -127,7 +129,7 @@ impl Negamax {
             return self.quiescence(position, &mut alpha, beta);
         }
 
-        if depth > 1 && self.is_out_of_time() {
+        if depth > 1 && self.has_reached_limit() {
             return -alpha;
         }
 
@@ -243,7 +245,7 @@ impl Negamax {
         let turn = position.turn();
         let mut best_move = None;
         for (move_index, (_, mov)) in moves.into_iter().enumerate() {
-            if depth > 1 && self.is_out_of_time() {
+            if depth > 1 && self.has_reached_limit() {
                 history.pop();
                 return alpha;
             }
@@ -400,11 +402,19 @@ impl Negamax {
         super::eval::evaluate(position)
     }
 
-    pub fn is_out_of_time(&self) -> bool {
-        if let Some(deadline) = self.deadline
-            && minstant::Instant::now() > deadline
-        {
-            return true;
+    pub fn has_reached_limit(&self) -> bool {
+        // Check node limit
+        if let Some(hard_nodes) = self.max_hard_nodes {
+            if self.node_count >= hard_nodes {
+                return true;
+            }
+        }
+
+        // Check deadline
+        if let Some(hard_deadline) = self.hard_deadline {
+            if minstant::Instant::now() > hard_deadline {
+                return true;
+            }
         }
 
         false
@@ -413,7 +423,7 @@ impl Negamax {
     fn quiescence(&mut self, position: &Chess, alpha: &mut i32, beta: i32) -> i32 {
         let static_eval = self.static_eval(position);
 
-        if self.is_out_of_time() {
+        if self.has_reached_limit() {
             return static_eval;
         }
 

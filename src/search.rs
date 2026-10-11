@@ -51,8 +51,10 @@ fn print_info(
 #[derive(Default)]
 pub struct SearchOptions {
     pub max_depth: Option<usize>,
-    pub max_nodes: Option<usize>,
-    pub deadline: Option<minstant::Instant>,
+    pub max_hard_nodes: Option<u64>,
+    pub max_soft_nodes: Option<u64>,
+    pub hard_deadline: Option<minstant::Instant>,
+    pub soft_deadline: Option<minstant::Instant>,
     pub bench: bool,
 }
 
@@ -60,30 +62,43 @@ pub fn search(
     position: &Chess,
     history: Option<&mut MoveHistory>,
     search_options: SearchOptions,
-) -> (Option<Move>, usize) {
+) -> (Option<Move>, u64) {
     let SearchOptions {
-        max_nodes,
         max_depth,
-        deadline,
+        max_hard_nodes,
+        max_soft_nodes,
+        hard_deadline,
+        soft_deadline,
         bench,
     } = search_options;
 
     let mut negamax = Negamax::new();
-    negamax.deadline = deadline;
-
+    negamax.max_hard_nodes = max_hard_nodes;
+    negamax.hard_deadline = hard_deadline;
+    
     let max_depth = max_depth.unwrap_or_else(|| {
-        if max_nodes.is_some() || deadline.is_some() {
+        if max_hard_nodes.is_some() || hard_deadline.is_some() {
             100
         } else {
             crate::engine_options().get_number("Default Depth")
         }
     });
 
-    let max_nodes = max_nodes.unwrap_or_default();
+    let start = minstant::Instant::now();
+    let (search_limit, is_node_search) = if let Some(soft_nodes) = max_soft_nodes {
+        // Node search
+        (soft_nodes, true)
+    } else {
+        // Time search
+        let limit_ms = soft_deadline.map_or(u64::MAX, |deadline| {
+            deadline.duration_since(start).as_millis() as u64
+        });
+        (limit_ms, false)
+    };
+
+
     let mut default_history = MoveHistory::default();
     let history = history.unwrap_or(&mut default_history);
-
-    let start = minstant::Instant::now();
 
     // aspiration window variables
     let mut alpha = -MATE_SCORE;
@@ -95,7 +110,16 @@ pub fn search(
 
     let mut pv = PVariation::default();
     while depth <= max_depth {
-        if negamax.is_out_of_time() && depth > 1 {
+
+        let mut search_progress = if is_node_search {
+            negamax.node_count
+        } else {
+            start.elapsed().as_millis() as u64
+        };
+
+        // Check soft / hard limits
+        if (search_progress >= search_limit || negamax.has_reached_limit()) 
+            && depth > 1 {
             break;
         }
 
@@ -103,22 +127,17 @@ pub fn search(
         // may be invalid if the search fails
         let score = negamax.negamax(position, history, depth, 0, alpha, beta, &mut iter_pv, true);
 
-        if negamax.is_out_of_time() {
+        if negamax.has_reached_limit() {
             if depth == 1 {
                 pv = iter_pv;
             }
             break;
         }
 
-        let node_limit_hit = max_nodes > 0 && negamax.node_count >= max_nodes;
-
         // Aspiration windows
         if depth > 4 {
             ASP_ITERS.fetch_add(1, Ordering::Relaxed);
             if score <= alpha {
-                if node_limit_hit {
-                    break;
-                }
                 beta = (alpha + beta) / 2;
                 alpha = std::cmp::max(-MATE_SCORE, alpha - delta);
                 delta += delta / 2;
@@ -127,9 +146,6 @@ pub fn search(
             }
             if score >= beta {
                 pv = iter_pv; // fail high still has vaild best move
-                if node_limit_hit {
-                    break;
-                }
                 beta = std::cmp::min(MATE_SCORE, beta + delta);
                 delta += delta / 2;
                 FAIL_HIGHS.fetch_add(1, Ordering::Relaxed);
@@ -149,7 +165,15 @@ pub fn search(
             print_info(depth, score, duration, &negamax, &pv);
         }
 
-        if negamax.is_out_of_time() || node_limit_hit {
+        search_progress = if is_node_search {
+            negamax.node_count
+        } else {
+            start.elapsed().as_millis() as u64
+        };
+
+        // Check soft / hard limits
+        if (search_progress >= search_limit || negamax.has_reached_limit()) 
+            && depth > 1 {
             break;
         }
 
@@ -175,8 +199,8 @@ pub struct TimeControl {
 }
 
 impl TimeControl {
-    pub fn into_deadline(
-        self,
+    pub fn into_soft_deadline(
+        &self,
         start_time: minstant::Instant,
         turn: Color,
         played_moves: u64,
@@ -186,6 +210,24 @@ impl TimeControl {
         let duration = match turn {
             Color::Black if self.b_time > 0 => (self.b_time / divisor) + (self.b_inc / 2),
             Color::White if self.w_time > 0 => (self.w_time / divisor) + (self.w_inc / 2),
+            _ => 0,
+        };
+
+        if duration > 0 {
+            Some(start_time + Duration::from_millis(duration))
+        } else {
+            None
+        }
+    }
+
+    pub fn into_hard_deadline(
+        &self,
+        start_time: minstant::Instant,
+        turn: Color,
+    ) -> Option<minstant::Instant> {
+        let duration = match turn {
+            Color::Black if self.b_time > 0 => (self.b_time / 10) + self.b_inc,
+            Color::White if self.w_time > 0 => (self.w_time / 10) + self.w_inc,
             _ => 0,
         };
 
