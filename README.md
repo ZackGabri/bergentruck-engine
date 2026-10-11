@@ -18,14 +18,19 @@ Burgentruck uses [shakmaty crate](https://crates.io/crates/Shakmaty) for board r
 - Reverse futility pruning (RFP)
 - Null move pruning (NMP)
 - Futility pruning (FP)
+- Late move pruning (LMP)
 - Principal variation search (PVS)
+- Late move reductions (LMR)
 - Move ordering: Hash move, MVV-LVA, quiet history moves, quiet moves
 
 ### Evaluation
-Currently using basic material + piece square tables (PST / PSQT) + small random value, inspired by Clockwork's older evaluation. In the future this will be used as a base to iteratively train neural networks, eventually allowing Burgentruck to use NNUE.
+Currently using basic material + piece square tables (PST / PSQT). In the future this will be used as a base to iteratively train neural networks, eventually allowing Burgentruck to use NNUE.
 
 ## Etymology
 Burgentruck (Bergentrück) is a reference to Undertale / Deltarune, both games developed by Toby Fox et al. In Undertale, the soundtrack for Asgore's boss theme is Bergentrücking (German, lit. "King in the Mountain"), while in Deltarune there is a [popular meme](https://knowyourmeme.com/memes/asgore-running-over-dess) (animation + song) about Asgore running over December (Dess) Holiday with his truck. It is the combination of both of these references that lead to the culmination of the engine's name.
 
+Note that the official name for the chess engine is "Burgentruck", despite the fact it was a typo.
+
 ## Changelogs
+v0.2 (WIP): Add more search enhancements up to IIR and soft time management.
 v0.1: First release. Search progression up to NMP except aspiration windows, which failed to gain. Tested against Stash v19 (120W 295D 585L, Book: UHO_2022_8mvs_+130_+139).
