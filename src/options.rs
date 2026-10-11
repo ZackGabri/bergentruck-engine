@@ -17,9 +17,9 @@ pub fn default_options_list() -> &'static Vec<EngineOption<'static>> {
             EngineOption::new("Threads", OptionType::Spin(1..=1, 1)),
             // FERTILITY PRUNING PARAMTERS
             EngineOption::new("FutilityDepth", OptionType::Spin(1..=8, 3)),
-            EngineOption::new("FutilityMarginPerDepth", OptionType::Spin(0..=1000, 300)),
-            EngineOption::new("FutilityMarginBase", OptionType::Spin(0..=1000, 0)),
-            EngineOption::new("FutilityMoves", OptionType::Spin(0..=67, 6)),
+            EngineOption::new("FutilityMarginPerDepth", OptionType::Spin(0..=1000, 59)),
+            EngineOption::new("FutilityMarginBase", OptionType::Spin(0..=1000, 48)),
+            EngineOption::new("FutilityMoves", OptionType::Spin(0..=67, 9)),
         ]
     })
 }
