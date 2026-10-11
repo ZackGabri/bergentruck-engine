@@ -142,7 +142,12 @@ pub fn search(
                 continue;
             }
             if score >= beta {
-                // pv = iter_pv; // fail high still has vaild best move
+                pv = iter_pv; // fail high still has vaild best move
+                // print new pv in case it exists before search fully completes
+                if !bench {
+                    let duration = start.elapsed();
+                    print_info(depth, score, duration, &negamax, &pv);
+                }
                 beta = std::cmp::min(MATE_SCORE, beta + delta);
                 delta += delta / 2;
                 FAIL_HIGHS.fetch_add(1, Ordering::Relaxed);
