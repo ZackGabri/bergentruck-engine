@@ -4,7 +4,6 @@ use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use shakmaty::{Chess, Move, MoveList, Position};
 
-use crate::engine_options;
 use crate::history::MoveHistory;
 use crate::search::{MATE_SCORE, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
@@ -99,10 +98,10 @@ pub struct Negamax {
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
 
-    fp_depth: usize,
-    fp_multiplier: usize,
-    fp_base: usize,
-    fp_moves: usize,
+                                     // fp_depth: usize,
+                                     // fp_multiplier: usize,
+                                     // fp_base: usize,
+                                     // fp_moves: usize,
 }
 
 impl Negamax {
@@ -116,11 +115,10 @@ impl Negamax {
 
             max_hard_nodes: None,
             hard_deadline: None,
-
-            fp_depth: engine_options().get_number("FutilityDepth"),
-            fp_multiplier: engine_options().get_number("FutilityMarginPerDepth"),
-            fp_base: engine_options().get_number("FutilityMarginBase"),
-            fp_moves: engine_options().get_number("FutilityMoves"),
+            // fp_depth: engine_options().get_number("FutilityDepth"),
+            // fp_multiplier: engine_options().get_number("FutilityMarginPerDepth"),
+            // fp_base: engine_options().get_number("FutilityMarginBase"),
+            // fp_moves: engine_options().get_number("FutilityMoves"),
         }
     }
 
