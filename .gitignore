@@ -1,4 +1,5 @@
 *.pdb
 *.exe
+profile.json.gz
 flamegraph.svg
 /target
