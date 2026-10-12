@@ -266,14 +266,9 @@ impl Negamax {
             let is_killer = self.killer_move_table[ply].contains_move(mov);
 
             // Move loop pruning
-            if !is_root
-                && !pv_node
-                && !is_check
-                && is_quiet
-                && !is_killer
-                && !is_mate
-            {
+            if !is_root && !pv_node && !is_check && is_quiet && !is_killer && !is_mate {
                 // Futility pruning
+                /*
                 if depth <= self.fp_depth && move_index >= self.fp_moves {
                     let static_eval = static_eval.get_or_insert(self.static_eval(position));
 
@@ -282,6 +277,7 @@ impl Negamax {
                         continue;
                     }
                 }
+                */
 
                 // Late move pruning
                 if move_index >= 5 + 4 * depth * depth {

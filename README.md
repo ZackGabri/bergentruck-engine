@@ -6,6 +6,7 @@ Burgentruck (yes, we spelt it wrong) is a rust chess engine developed by ZackGab
 ### Strength 
 | Version | CCRL 2+1 |
 |:-------:|:--------:|
+|  v0.2   |  ~2434   |
 |  v0.1   |  ~1879   |
 
 ### Board representation
@@ -17,11 +18,13 @@ Burgentruck uses [shakmaty crate](https://crates.io/crates/Shakmaty) for board r
 - Transposition table
 - Reverse futility pruning (RFP)
 - Null move pruning (NMP)
-- Futility pruning (FP)
+- Futility pruning (FP) (commented)
 - Late move pruning (LMP)
 - Principal variation search (PVS)
 - Late move reductions (LMR)
+
 - Move ordering: Hash move, MVV-LVA, quiet history moves, quiet moves
+- Time management: Hard and soft time management
 
 ### Evaluation
 Currently using basic material + piece square tables (PST / PSQT). In the future this will be used as a base to iteratively train neural networks, eventually allowing Burgentruck to use NNUE.
