@@ -1,7 +1,5 @@
 use std::sync::OnceLock;
 
-use rand::SeedableRng;
-use rand::rngs::SmallRng;
 use shakmaty::{Chess, Move, MoveList, Position};
 
 use crate::history::MoveHistory;
@@ -86,33 +84,29 @@ fn get_lmr_table() -> &'static [[usize; MAX_PSUEDO_MOVES]; MAX_PLY] {
     })
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct ImprovingStackEntry {
+    pub static_eval: Option<i32>,
+    pub improving: bool,
+}
+
 // struct for shared data between every negamax call
 pub struct Negamax {
     pub node_count: u64,
+    improving_table: [ImprovingStackEntry; MAX_PLY],
     history_table: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
-
-    #[allow(unused)]
-    rng: SmallRng,
-
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
-
-                                     // fp_depth: usize,
-                                     // fp_multiplier: usize,
-                                     // fp_base: usize,
-                                     // fp_moves: usize,
 }
 
 impl Negamax {
     pub fn new() -> Self {
         Self {
             node_count: 0,
+            improving_table: [ImprovingStackEntry::default(); MAX_PLY],
             history_table: [[[0; 64]; 64]; 2],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
-
-            rng: SmallRng::from_seed([0; 32]),
-
             max_hard_nodes: None,
             hard_deadline: None,
             // fp_depth: engine_options().get_number("FutilityDepth"),
@@ -154,9 +148,6 @@ impl Negamax {
             return 0;
         }
 
-        let is_check = position.is_check();
-        let is_root = ply == 0;
-
         let tt_entry = transposition_table::get(hash);
         let tt_hit = tt_entry.hash == hash;
         let replace_tt = tt_entry.depth < depth || !tt_hit;
@@ -187,17 +178,45 @@ impl Negamax {
             }
         }
 
-        let mut static_eval = None;
+        let in_check = position.is_check();
+        let is_root = ply == 0;
+
+        let mut static_eval = if in_check {
+            self.improving_table[ply].improving = false;
+            self.improving_table[ply].static_eval = None;
+            None
+        } else {
+            let eval = self.static_eval(position);
+            self.improving_table[ply].static_eval = Some(eval);
+
+            let past_eval = if ply >= 2 && self.improving_table[ply - 2].static_eval.is_some() {
+                self.improving_table[ply - 2].static_eval
+            } else if ply >= 4 {
+                self.improving_table[ply - 4].static_eval
+            } else {
+                None
+            };
+
+            let improving = match past_eval {
+                Some(past) => eval > past,
+                None => false,
+            };
+
+            self.improving_table[ply].improving = improving;
+            Some(eval)
+        };
+
+        let improving = self.improving_table[ply].improving;
 
         // whole node pruning
-        if !is_check && !is_root {
+        if !in_check && !is_root {
             // reverse futility pruning
-            let static_eval = static_eval.get_or_insert(self.static_eval(position));
-
-            let margin = 80 * depth;
-
-            if depth <= 4 && *static_eval >= beta + margin as i32 {
-                return *static_eval;
+            if depth <= 4 {
+                let static_eval = static_eval.get_or_insert(self.static_eval(position));
+                let margin = if improving { 50 * depth } else { 80 * depth };
+                if *static_eval >= beta + margin as i32 {
+                    return *static_eval;
+                }
             }
 
             // null move pruning
@@ -231,7 +250,7 @@ impl Negamax {
         // Internal iterative reductions (IIR)
         // If the position has not been searched yet (i.e. no hash move), we try searching with reduced
         // depth to record a move that we can later re-use.
-        if depth >= 6 && !is_check && pv_node && (!tt_hit || tt_entry.depth <= depth - 5) {
+        if depth >= 6 && !in_check && pv_node && (!tt_hit || tt_entry.depth <= depth - 5) {
             depth -= 1;
         }
 
@@ -239,7 +258,7 @@ impl Negamax {
 
         let moves = self.get_sorted_moves(position, ply, &tt_entry.best_move);
         if moves.is_empty() {
-            if is_check {
+            if in_check {
                 // checkmate
                 return -MATE_SCORE + ply as i32;
             } else {
@@ -264,7 +283,7 @@ impl Negamax {
             let is_killer = self.killer_move_table[ply].contains_move(mov);
 
             // Move loop pruning
-            if !is_root && !pv_node && !is_check && is_quiet && !is_killer && !is_mate {
+            if !is_root && !pv_node && !in_check && is_quiet && !is_killer && !is_mate {
                 // Futility pruning
                 /*
                 if depth <= self.fp_depth && move_index >= self.fp_moves {
@@ -295,7 +314,7 @@ impl Negamax {
             // If we are in a non-PV node, OR we are in a PV-node examining moves after the 1st legal move
             if !pv_node || move_index > 0 {
                 // Late move reductions (LMR)
-                let lmr_conditions = !is_check
+                let lmr_conditions = !in_check
                     && depth >= 3
                     && move_index >= 3
                     && is_quiet
