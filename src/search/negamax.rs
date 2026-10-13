@@ -296,8 +296,16 @@ impl Negamax {
                 }
                 */
 
-                // Late move pruning
-                if move_index >= 5 + 4 * depth * depth {
+                // Late move pruning (LMP)
+                let mut lmp_threshold = 5 + 4 * depth * depth;
+
+                if !improving {
+                    lmp_threshold -= 2 * depth;
+                } else {
+                    lmp_threshold += 2 * depth;
+                }
+
+                if move_index >= lmp_threshold {
                     continue;
                 }
             }
