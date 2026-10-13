@@ -211,12 +211,12 @@ impl Negamax {
         // whole node pruning
         if !in_check && !is_root {
             // reverse futility pruning
-            let static_eval = static_eval.get_or_insert(self.static_eval(position));
-
-            let margin = if improving { 40 * depth } else { 80 * depth };
-
-            if depth <= 4 && *static_eval >= beta + margin as i32 {
-                return *static_eval;
+            if depth <= 4 {
+                let static_eval = static_eval.get_or_insert(self.static_eval(position));
+                let margin = if improving { 50 * depth } else { 80 * depth };
+                if *static_eval >= beta + margin as i32 {
+                    return *static_eval;
+                }
             }
 
             // null move pruning
