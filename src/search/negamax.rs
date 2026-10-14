@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use shakmaty::{Chess, Move, MoveList, Position};
 
 use crate::history::MoveHistory;
-use crate::search::{MATE_SCORE, MAX_PLY};
+use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
 
 pub struct PVariation {
@@ -207,15 +207,16 @@ impl Negamax {
         };
 
         let improving = self.improving_table[ply].improving;
+        let turn = position.turn();
 
         // whole node pruning
         if !in_check && !is_root {
             // reverse futility pruning
             if depth <= 4 {
-                let static_eval = static_eval.get_or_insert(self.static_eval(position));
+                let static_eval = *static_eval.get_or_insert(self.static_eval(position));
                 let margin = if improving { 50 * depth } else { 80 * depth };
-                if *static_eval >= beta + margin as i32 {
-                    return *static_eval;
+                if static_eval >= beta + margin as i32 {
+                    return static_eval;
                 }
             }
 
@@ -223,8 +224,9 @@ impl Negamax {
             if depth >= 3 {
                 // Make sure it's not king and pawn endgame
                 let board = position.board();
-                let non_pawns = (board.occupied() & (!board.pawns())).count();
-                if non_pawns > 2 {
+                let non_pawns = board.by_color(turn) & !board.pawns() & !board.kings();
+
+                if non_pawns.is_empty() {
                     let null_position = position.clone().swap_turn().unwrap();
                     let reduction = 3 + depth / 3;
                     let null_score = -self.negamax(
@@ -240,7 +242,7 @@ impl Negamax {
                     );
 
                     // Make sure it's not a mate score
-                    if null_score >= beta && null_score.abs() < 69000 {
+                    if null_score >= beta && null_score.abs() < MATE_THRESHOLD {
                         return null_score;
                     }
                 }
@@ -270,7 +272,6 @@ impl Negamax {
         // push current position hash before exploring children
         history.push_hash(hash);
 
-        let turn = position.turn();
         let mut best_move = None;
         for (move_index, (_, mov)) in moves.into_iter().enumerate() {
             if depth > 1 && self.has_reached_limit() {
