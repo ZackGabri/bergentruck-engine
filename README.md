@@ -35,5 +35,5 @@ Burgentruck (Bergentrück) is a reference to Undertale / Deltarune, both games d
 Note that the official name for the chess engine is "Burgentruck", despite the fact it was a typo.
 
 ## Changelogs
-v0.2 (WIP): Add more search enhancements up to IIR and soft time management.
+v0.2 (WIP): Add more search enhancements up to IIR and soft time management. <br>
 v0.1: First release. Search progression up to NMP except aspiration windows, which failed to gain. Tested against Stash v19 (120W 295D 585L, Book: UHO_2022_8mvs_+130_+139).

@@ -9,12 +9,14 @@ use shakmaty::{Chess, Position};
 use crate::history::MoveHistory;
 use crate::options::EngineOptions;
 use crate::search::SearchOptions;
+use crate::nn::data;
 
 mod bench;
 mod history;
 mod options;
 mod search;
 mod transposition_table;
+mod nn;
 
 pub fn engine_options() -> &'static EngineOptions {
     static ENGINE_OPTIONS: OnceLock<EngineOptions> = OnceLock::new();
@@ -212,6 +214,9 @@ fn main() -> Result<(), anyhow::Error> {
                 if let Err(err) = bench::bench() {
                     println!("Bench Failed! {:?}", err);
                 }
+            }
+            ["test", ..] => {
+                println!("Features: {:?}", data::parse_board_to_features(&pos));
             }
 
             [] => {}
