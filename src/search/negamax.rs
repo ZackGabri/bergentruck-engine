@@ -224,9 +224,9 @@ impl Negamax {
             if depth >= 3 {
                 // Make sure it's not king and pawn endgame
                 let board = position.board();
-                let non_pawns = board.by_color(turn) & !board.pawns() & !board.kings();
+                let non_pawns = (board.by_color(turn) & (!board.pawns())) & (!board.kings());
 
-                if non_pawns.is_empty() {
+                if non_pawns.any() {
                     let null_position = position.clone().swap_turn().unwrap();
                     let reduction = 3 + depth / 3;
                     let null_score = -self.negamax(
