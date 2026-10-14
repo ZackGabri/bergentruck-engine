@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+burn = "0.22.0"
 minstant = { version = "0.1.7", features = ["coarsetime"] }
 rand = "0.9.2"
 shakmaty = { version = "0.30.2", features = ["nohash-hasher", "variant"] }
