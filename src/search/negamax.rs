@@ -211,9 +211,10 @@ impl Negamax {
 
         // whole node pruning
         if !in_check && !is_root {
+            let static_eval = *static_eval.get_or_insert(self.static_eval(position));
+
             // reverse futility pruning
             if depth <= 4 {
-                let static_eval = *static_eval.get_or_insert(self.static_eval(position));
                 let margin = if improving { 50 * depth } else { 80 * depth };
                 if static_eval >= beta + margin as i32 {
                     return static_eval;
@@ -226,7 +227,7 @@ impl Negamax {
                 let board = position.board();
                 let non_pawns = (board.by_color(turn) & (!board.pawns())) & (!board.kings());
 
-                if non_pawns.any() {
+                if non_pawns.any() && static_eval >= beta {
                     let null_position = position.clone().swap_turn().unwrap();
                     let reduction = 3 + depth / 3;
                     let null_score = -self.negamax(
