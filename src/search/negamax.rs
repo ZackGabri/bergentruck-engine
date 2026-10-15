@@ -227,7 +227,9 @@ impl Negamax {
                 let board = position.board();
                 let non_pawns = (board.by_color(turn) & (!board.pawns())) & (!board.kings());
 
-                if non_pawns.any() && static_eval >= beta {
+                let margin = if improving { 25 * depth as i32 } else { 0 };
+
+                if non_pawns.any() && static_eval >= beta - margin {
                     let null_position = position.clone().swap_turn().unwrap();
                     let reduction = 3 + depth / 3;
                     let null_score = -self.negamax(
