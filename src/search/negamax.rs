@@ -63,17 +63,23 @@ impl KillerMoves {
 pub const MAX_PSUEDO_MOVES: usize = 280;
 
 // Late Move Reductions table
-static LMR_TABLE: OnceLock<[[usize; MAX_PSUEDO_MOVES]; MAX_PLY]> = OnceLock::new();
-fn get_lmr_table() -> &'static [[usize; MAX_PSUEDO_MOVES]; MAX_PLY] {
+// 3D LMR table: [improving][depth][move_num]
+static LMR_TABLE: OnceLock<[[[usize; MAX_PSUEDO_MOVES]; MAX_PLY]; 2]> = OnceLock::new();
+fn get_lmr_table() -> &'static [[[usize; MAX_PSUEDO_MOVES]; MAX_PLY]; 2] {
     LMR_TABLE.get_or_init(|| {
-        let mut table = [[0; MAX_PSUEDO_MOVES]; MAX_PLY];
+        let mut table = [[[0; MAX_PSUEDO_MOVES]; MAX_PLY]; 2];
 
         let mut depth = 1;
         while depth < MAX_PLY {
             let mut move_num = 1;
             while move_num < MAX_PSUEDO_MOVES {
-                table[depth][move_num] =
-                    (0.50 + (depth as f64).ln() * (move_num as f64).ln() / 3.00) as usize;
+                let base = (0.50 + (depth as f64).ln() * (move_num as f64).ln() / 3.00) as usize;
+
+                // Improving = false reduce more (+1)
+                table[0][depth][move_num] = base + 1;
+
+                // Improving = true reduce less (-1)
+                table[1][depth][move_num] = base.saturating_sub(1);
 
                 move_num += 1;
             }
@@ -330,7 +336,7 @@ impl Negamax {
                     && !self.killer_move_table[ply].contains_move(mov);
 
                 let lmr_reduction = if lmr_conditions {
-                    get_lmr_table()[depth][move_index]
+                    get_lmr_table()[improving as usize][depth][move_index]
                 } else {
                     0
                 };
