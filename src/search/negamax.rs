@@ -104,6 +104,7 @@ pub struct Negamax {
     killer_move_table: [KillerMoves; MAX_PLY],
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
+    pub seldepth: usize,
 }
 
 impl Negamax {
@@ -115,6 +116,7 @@ impl Negamax {
             killer_move_table: [KillerMoves::default(); MAX_PLY],
             max_hard_nodes: None,
             hard_deadline: None,
+            seldepth: 0,
             // fp_depth: engine_options().get_number("FutilityDepth"),
             // fp_multiplier: engine_options().get_number("FutilityMarginPerDepth"),
             // fp_base: engine_options().get_number("FutilityMarginBase"),
@@ -134,12 +136,20 @@ impl Negamax {
         pv: &mut PVariation,
         pv_node: bool,
     ) -> i32 {
-        if depth == 0 {
-            return self.quiescence(position, &mut alpha, beta);
+        if depth <= 0 {
+            return self.quiescence(position, &mut alpha, beta, ply);
         }
 
         if depth > 1 && self.has_reached_limit() {
             return -alpha;
+        }
+
+        if ply >= MAX_PLY - 1 {
+            return self.static_eval(position);
+        }
+
+        if ply > self.seldepth {
+            self.seldepth = ply;
         }
 
         let original_alpha = alpha;
@@ -345,7 +355,7 @@ impl Negamax {
                 score = -self.negamax(
                     &position,
                     history,
-                    depth - lmr_reduction - 1,
+                    depth.saturating_sub(lmr_reduction + 1),
                     ply + 1,
                     -alpha - 1,
                     -alpha,
@@ -462,12 +472,21 @@ impl Negamax {
         false
     }
 
-    fn quiescence(&mut self, position: &Chess, alpha: &mut i32, beta: i32) -> i32 {
+    fn quiescence(&mut self, position: &Chess, alpha: &mut i32, beta: i32, ply: usize) -> i32 {
         let static_eval = self.static_eval(position);
 
         if self.has_reached_limit() {
             return static_eval;
         }
+
+        if ply >= MAX_PLY - 1 {
+            return self.static_eval(position);
+        }
+
+        if ply > self.seldepth {
+            self.seldepth = ply;
+        }
+
 
         let mut best_value = static_eval;
         if best_value >= beta {
@@ -484,7 +503,7 @@ impl Negamax {
             let mut position = position.clone();
             position.play_unchecked(capture);
 
-            let score = -self.quiescence(&position, &mut -beta, -*alpha);
+            let score = -self.quiescence(&position, &mut -beta, -*alpha, ply + 1);
             self.node_count += 1;
 
             if score >= beta {

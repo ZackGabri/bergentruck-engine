@@ -25,7 +25,7 @@ fn print_info(
     negamax: &Negamax,
     pv: &PVariation,
 ) {
-    let Negamax { node_count, .. } = negamax;
+    let Negamax { node_count, seldepth, .. } = negamax;
 
     let hashfull = transposition_table::hashfull();
     let nps = (*node_count as f64 / duration.as_secs_f64()) as usize;
@@ -44,7 +44,7 @@ fn print_info(
     };
 
     println!(
-        "info depth {depth} score {score_string} nodes {node_count} nps {nps} hashfull {hashfull} time {time_ms} pv {pv}"
+        "info depth {depth} seldepth {seldepth} score {score_string} nodes {node_count} nps {nps} hashfull {hashfull} time {time_ms} pv {pv}"
     );
 }
 
