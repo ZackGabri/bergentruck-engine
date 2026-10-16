@@ -73,13 +73,13 @@ fn get_lmr_table() -> &'static [[[usize; MAX_PSUEDO_MOVES]; MAX_PLY]; 2] {
         while depth < MAX_PLY {
             let mut move_num = 1;
             while move_num < MAX_PSUEDO_MOVES {
-                let base = (0.50 + (depth as f64).ln() * (move_num as f64).ln() / 3.00) as usize;
+                let base = 0.50 + (depth as f64).ln() * (move_num as f64).ln() / 3.00;
 
-                // Improving = false reduce more (+1)
-                table[0][depth][move_num] = base + 1;
+                // reduce more when not improving
+                table[0][depth][move_num] = (base + 0.5).round() as usize;
 
-                // Improving = true reduce less (-1)
-                table[1][depth][move_num] = base.saturating_sub(1);
+                // reduce less when improving
+                table[1][depth][move_num] = (base - 0.5).round() as usize;
 
                 move_num += 1;
             }
@@ -136,7 +136,7 @@ impl Negamax {
         pv: &mut PVariation,
         pv_node: bool,
     ) -> i32 {
-        if depth <= 0 {
+        if depth == 0 {
             return self.quiescence(position, &mut alpha, beta, ply);
         }
 
@@ -486,7 +486,6 @@ impl Negamax {
         if ply > self.seldepth {
             self.seldepth = ply;
         }
-
 
         let mut best_value = static_eval;
         if best_value >= beta {
