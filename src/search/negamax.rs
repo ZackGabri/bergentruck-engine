@@ -499,6 +499,10 @@ impl Negamax {
         self.sort_captures(&mut captures);
 
         for capture in captures {
+            if super::see::see(position, &capture) < 0 {
+                continue;
+            }
+
             let mut position = position.clone();
             position.play_unchecked(capture);
 

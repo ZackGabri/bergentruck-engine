@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod eval;
 pub mod negamax;
+pub mod see;
 
 pub static FAIL_LOWS: AtomicUsize = AtomicUsize::new(0);
 pub static FAIL_HIGHS: AtomicUsize = AtomicUsize::new(0);
@@ -25,7 +26,11 @@ fn print_info(
     negamax: &Negamax,
     pv: &PVariation,
 ) {
-    let Negamax { node_count, seldepth, .. } = negamax;
+    let Negamax {
+        node_count,
+        seldepth,
+        ..
+    } = negamax;
 
     let hashfull = transposition_table::hashfull();
     let nps = (*node_count as f64 / duration.as_secs_f64()) as usize;
