@@ -300,7 +300,7 @@ impl Negamax {
             let is_killer = self.killer_move_table[ply].contains_move(mov);
 
             // Move loop pruning
-            if !is_root && !pv_node && !in_check && is_quiet && !is_killer && !is_mate {
+            if !is_root && !pv_node && !in_check && !is_mate {
                 // Futility pruning
                 /*
                 if depth <= self.fp_depth && move_index >= self.fp_moves {
@@ -314,16 +314,33 @@ impl Negamax {
                 */
 
                 // Late move pruning (LMP)
-                let mut lmp_threshold = 5 + 4 * depth * depth;
+                if is_quiet && !is_killer {
+                    let mut lmp_threshold = 5 + 4 * depth * depth;
 
-                if !improving {
-                    lmp_threshold -= 2 * depth;
-                } else {
-                    lmp_threshold += 2 * depth;
+                    if !improving {
+                        lmp_threshold -= 2 * depth;
+                    } else {
+                        lmp_threshold += 2 * depth;
+                    }
+
+                    if move_index >= lmp_threshold {
+                        continue;
+                    }
                 }
 
-                if move_index >= lmp_threshold {
-                    continue;
+                // SEE Pruning
+                if move_index > 0 && depth <= 6 {
+                    let depth = depth as i32;
+
+                    let see_threshold = if is_quiet {
+                        (-16 * depth * depth + 53 * depth + 27).min(0)
+                    } else {
+                        (-8 * depth * depth - 37 * depth + 10).min(0)
+                    };
+
+                    if super::see::see(position, &mov) < see_threshold {
+                        continue;
+                    }
                 }
             }
 
@@ -499,6 +516,7 @@ impl Negamax {
         self.sort_captures(&mut captures);
 
         for capture in captures {
+            // SEE Pruning
             if super::see::see(position, &capture) < 0 {
                 continue;
             }
