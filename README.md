@@ -14,14 +14,15 @@ Burgentruck uses [shakmaty crate](https://crates.io/crates/Shakmaty) for board r
 
 ### Search
 - Negamax with Alpha-beta Pruning (fail-soft)
+    - General heuristics: Improving
+    - Reverse futility pruning (RFP)
+    - Null move pruning (NMP)
+    - Futility pruning (FP) (commented)
+    - Late move pruning (LMP)
+    - Principal variation search (PVS)
+    - Late move reductions (LMR)
 - Quiescence search (fail-soft)
 - Transposition table
-- Reverse futility pruning (RFP)
-- Null move pruning (NMP)
-- Futility pruning (FP) (commented)
-- Late move pruning (LMP)
-- Principal variation search (PVS)
-- Late move reductions (LMR)
 
 - Move ordering: Hash move, MVV-LVA, quiet history moves, quiet moves
 - Time management: Hard and soft time management
@@ -35,5 +36,6 @@ Burgentruck (Bergentrück) is a reference to Undertale / Deltarune, both games d
 Note that the official name for the chess engine is "Burgentruck", despite the fact it was a typo.
 
 ## Changelogs
-v0.2 (WIP): Add more search enhancements up to IIR and soft time management.
-v0.1: First release. Search progression up to NMP except aspiration windows, which failed to gain. Tested against Stash v19 (120W 295D 585L, Book: UHO_2022_8mvs_+130_+139).
+v0.3 (dev): Add improving heuristics and fix bus. <br>
+v0.2: Bugfixes and added more search enhancements up to IIR and soft time management. <br>
+v0.1: First release. Search progression up to NMP except aspiration windows, which failed to gain.
