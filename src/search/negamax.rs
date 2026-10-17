@@ -329,7 +329,7 @@ impl Negamax {
                 }
 
                 // SEE Pruning
-                if move_index > 0 && depth <= 6 {
+                if move_index > 0 && depth <= 8 {
                     let depth = depth as i32;
 
                     let see_threshold = if is_quiet {
