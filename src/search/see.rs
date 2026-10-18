@@ -1,6 +1,5 @@
 use shakmaty::Color::{self, Black, White};
 use shakmaty::{Bitboard, Board, Chess, Move, Position, Rank, Role, Square, attacks};
-use std::cmp::max;
 
 // The default shakmaty attacks_to is based on color and it would be inefficient to call it twice
 #[inline]
@@ -27,13 +26,13 @@ fn attackers_to(board: &Board, square: Square, occupancies: Bitboard) -> Bitboar
 }
 
 #[inline]
-fn consider_xrays(board: &Board, occupied: Bitboard, to_sq: Square) -> Bitboard {
-    let bishop_sliders = board.bishops() | board.queens();
-    let rook_sliders = board.rooks() | board.queens();
+fn diagonal_xrays(board: &Board, occupied: Bitboard, to_sq: Square) -> Bitboard {
+    attacks::bishop_attacks(to_sq, occupied) & (board.bishops() | board.queens()) & occupied
+}
 
-    ((attacks::bishop_attacks(to_sq, occupied) & bishop_sliders)
-        | (attacks::rook_attacks(to_sq, occupied) & rook_sliders))
-        & occupied
+#[inline]
+fn orthogonal_xrays(board: &Board, occupied: Bitboard, to_sq: Square) -> Bitboard {
+    attacks::rook_attacks(to_sq, occupied) & (board.rooks() | board.queens()) & occupied
 }
 
 #[inline]
@@ -76,73 +75,80 @@ fn get_least_valuable_piece(
     Some((sq, role))
 }
 
-pub fn see(position: &Chess, mov: &Move) -> i32 {
-    let mut gain = [0; 32];
-    let mut d = 0;
-
+pub fn see(position: &Chess, mov: &Move, threshold: i32) -> bool {
     let board = position.board();
     let from_sq = mov.from().unwrap();
     let to_sq = mov.to();
-    let target = mov.capture();
-    let role = mov.role();
+    let us = position.turn();
 
-    // May xray pieces: pawns, bishops, rooks, queens
-    let may_xray = board.pawns() | board.bishops() | board.rooks() | board.queens();
-    let mut from_set = Bitboard::from_square(from_sq);
-    let mut occupied = board.occupied();
+    let promo_square = matches!(to_sq.rank(), Rank::First | Rank::Eighth);
+    let promo_bonus = piece_value(Role::Queen) - piece_value(Role::Pawn);
+
+    let promo_gain = |color: Color, candidates: Bitboard| -> i32 {
+        if promo_square && (candidates & board.pawns() & board.by_color(color)).any() {
+            promo_bonus
+        } else {
+            0
+        }
+    };
+
+    let mut balance = mov.capture().map_or(0, piece_value)
+        + mov.promotion().map_or(0, |promotion| {
+            piece_value(promotion) - piece_value(Role::Pawn)
+        })
+        - threshold;
+
+    if balance < 0 {
+        return false;
+    }
+
+    let victim_value = piece_value(mov.promotion().unwrap_or(mov.role()))
+        + promo_gain(us.other(), attacks::pawn_attacks(us, to_sq));
+    balance -= victim_value;
+
+    if balance >= 0 {
+        return true;
+    }
+
+    let mut occupied = board.occupied() ^ Bitboard::from_square(from_sq);
 
     if mov.is_en_passant() {
         let ep_square = Square::from_coords(to_sq.file(), from_sq.rank());
         occupied ^= Bitboard::from_square(ep_square);
     }
 
-    let mut attadef = attackers_to(board, to_sq, occupied);
+    let mut attackers = attackers_to(board, to_sq, occupied) & occupied;
+    let mut stm = us.other();
 
-    gain[0] = target.map_or(0, piece_value)
-        + mov.promotion().map_or(0, |promotion| {
-            piece_value(promotion) - piece_value(Role::Pawn)
-        });
-
-    let mut current_piece = mov.promotion().unwrap_or(role);
-    let mut stm = position.turn().other();
-    let promo_square = matches!(to_sq.rank(), Rank::First | Rank::Eighth);
-
-    loop {
-        d += 1;
-        gain[d] = piece_value(current_piece) - gain[d - 1];
-
-        attadef &= !from_set;
-        occupied ^= from_set;
-
-        if (from_set & may_xray).any() {
-            attadef |= consider_xrays(board, occupied, to_sq);
+    while let Some((sq, attacker)) = get_least_valuable_piece(board, attackers, stm) {
+        if attacker == Role::King && (attackers & board.by_color(stm.other())).any() {
+            break;
         }
 
-        match get_least_valuable_piece(board, attadef, stm) {
-            Some((sq, piece)) => {
-                if piece == Role::King && (attadef & board.by_color(stm.other())).any() {
-                    break;
-                }
-
-                from_set = Bitboard::from_square(sq);
-                if piece == Role::Pawn && promo_square {
-                    // Q - P, and a queen now sits on the square
-                    gain[d] += piece_value(Role::Queen) - piece_value(Role::Pawn);
-                    current_piece = Role::Queen;
-                } else {
-                    current_piece = piece;
-                }
-            }
-            None => break,
-        }
-
+        // Make the capture
+        occupied ^= Bitboard::from_square(sq);
         stm = stm.other();
+
+        let exposed = if attacker == Role::Pawn && promo_square {
+            piece_value(Role::Queen)
+        } else {
+            piece_value(attacker)
+        } + promo_gain(stm, attackers);
+
+        balance = -balance - 1 - exposed;
+        if balance >= 0 {
+            break;
+        }
+
+        if !matches!(attacker, Role::Knight | Role::King) {
+            attackers |= if sq.file() == to_sq.file() || sq.rank() == to_sq.rank() {
+                orthogonal_xrays(board, occupied, to_sq)
+            } else {
+                diagonal_xrays(board, occupied, to_sq)
+            };
+        }
+        attackers &= occupied;
     }
 
-    while d > 1 {
-        d -= 1;
-        gain[d - 1] = -max(-gain[d - 1], gain[d]);
-    }
-
-    gain[0]
+    stm != us
 }

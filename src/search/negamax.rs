@@ -338,7 +338,7 @@ impl Negamax {
                         (-8 * depth * depth - 37 * depth + 10).min(0)
                     };
 
-                    if super::see::see(position, &mov) < see_threshold {
+                    if !super::see::see(position, &mov, see_threshold) {
                         continue;
                     }
                 }
@@ -517,7 +517,7 @@ impl Negamax {
 
         for capture in captures {
             // SEE Pruning
-            if super::see::see(position, &capture) < 0 {
+            if !super::see::see(position, &capture, 0) {
                 continue;
             }
 
@@ -557,7 +557,7 @@ impl Negamax {
                 2_000_000_000 // Hash move is highest priority
             } else if let Some(victim) = m.capture() {
                 let mvv_lva = super::eval::MVV_LVA[victim as usize - 1][m.role() as usize - 1];
-                if super::see::see(position, &m) < 0 {
+                if !super::see::see(position, &m, 0) {
                     -1_000_000_000 + mvv_lva // after quiets
                 } else {
                     1_000_000_000 + mvv_lva

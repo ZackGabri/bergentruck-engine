@@ -107,11 +107,13 @@ fn see_test() {
         let (fen_str, move_str, expected_score) = parse_test_position(i, entry);
         let (position, mov) = parse_move(fen_str, move_str);
 
-        let actual_score = super::see::see(&position, &mov);
-
-        assert_eq!(
-            actual_score, expected_score,
-            "Mismatch in position {i}:\nFEN: {fen_str}\nMove: {move_str}\nExpected: {expected_score}\nActual: {actual_score}",
+        assert!(
+            super::see::see(&position, &mov, expected_score),
+            "see() should accept threshold {expected_score} at position {i}:\nFEN: {fen_str}\nMove: {move_str}"
+        );
+        assert!(
+            !super::see::see(&position, &mov, expected_score + 1),
+            "see() should reject threshold {expected_score}+1 at position {i}:\nFEN: {fen_str}\nMove: {move_str}"
         );
     }
 }
