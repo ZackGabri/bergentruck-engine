@@ -556,7 +556,12 @@ impl Negamax {
             let score = if Some(m) == *hash_move {
                 2_000_000_000 // Hash move is highest priority
             } else if let Some(victim) = m.capture() {
-                1_000_000_000 + super::eval::MVV_LVA[victim as usize - 1][m.role() as usize - 1]
+                let mvv_lva = super::eval::MVV_LVA[victim as usize - 1][m.role() as usize - 1];
+                if super::see::see(position, &m) > 0 {
+                    1_000_000_000 + mvv_lva
+                } else {
+                    -1_000_000_000 + mvv_lva // after quiets
+                }
             } else if killers.contains_move(m) {
                 1_000_000_000 // Same value as MVV-LVA so it's above bad captures but below good ones
             } else {
