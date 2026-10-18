@@ -64,8 +64,8 @@ pub const MAX_PSUEDO_MOVES: usize = 280;
 
 // Late Move Reductions table
 // 3D LMR table: [improving][depth][move_num]
-static LMR_TABLE: OnceLock<[[[usize; MAX_PSUEDO_MOVES]; MAX_PLY]; 2]> = OnceLock::new();
-fn get_lmr_table() -> &'static [[[usize; MAX_PSUEDO_MOVES]; MAX_PLY]; 2] {
+static LMR_TABLE: OnceLock<[[[u8; MAX_PSUEDO_MOVES]; MAX_PLY]; 2]> = OnceLock::new();
+fn get_lmr_table() -> &'static [[[u8; MAX_PSUEDO_MOVES]; MAX_PLY]; 2] {
     LMR_TABLE.get_or_init(|| {
         let mut table = [[[0; MAX_PSUEDO_MOVES]; MAX_PLY]; 2];
 
@@ -76,10 +76,10 @@ fn get_lmr_table() -> &'static [[[usize; MAX_PSUEDO_MOVES]; MAX_PLY]; 2] {
                 let base = 0.50 + (depth as f64).ln() * (move_num as f64).ln() / 3.00;
 
                 // reduce more when not improving
-                table[0][depth][move_num] = (base + 0.5).round() as usize;
+                table[0][depth][move_num] = (base + 0.5).round() as u8;
 
                 // reduce less when improving
-                table[1][depth][move_num] = (base - 0.5).round() as usize;
+                table[1][depth][move_num] = (base - 0.5).round() as u8;
 
                 move_num += 1;
             }
@@ -289,7 +289,9 @@ impl Negamax {
         history.push_hash(hash);
 
         let mut best_move = None;
-        for (move_index, (_, mov)) in moves.into_iter().enumerate() {
+        let mut child_pv = PVariation::default();
+
+        for (move_index, (_, mov, passed_0see)) in moves.into_iter().enumerate() {
             if depth > 1 && self.has_reached_limit() {
                 history.pop();
                 return alpha;
@@ -330,6 +332,13 @@ impl Negamax {
 
                 // SEE Pruning
                 if move_index > 0 && depth <= 6 {
+                    // minimum threshold is 0 anyway, if it already failed to pass it then no point continuing
+                    if let Some(passed) = passed_0see
+                        && !passed
+                    {
+                        continue;
+                    }
+
                     let depth = depth as i32;
 
                     let see_threshold = if is_quiet {
@@ -350,7 +359,7 @@ impl Negamax {
             self.node_count += 1;
 
             let mut score = -MATE_SCORE;
-            let mut child_pv = PVariation::default();
+            child_pv.length = 0;
 
             // Principal variation search (PVS)
             // If we are in a non-PV node, OR we are in a PV-node examining moves after the 1st legal move
@@ -366,7 +375,7 @@ impl Negamax {
                     get_lmr_table()[improving as usize][depth][move_index]
                 } else {
                     0
-                };
+                } as usize;
 
                 // Perform zero-window search (ZWS) on non-PV nodes
                 score = -self.negamax(
@@ -497,7 +506,7 @@ impl Negamax {
         }
 
         if ply >= MAX_PLY - 1 {
-            return self.static_eval(position);
+            return static_eval;
         }
 
         if ply > self.seldepth {
@@ -546,13 +555,14 @@ impl Negamax {
         position: &Chess,
         ply: usize,
         hash_move: &Option<Move>,
-    ) -> Vec<(i32, Move)> {
+    ) -> Vec<(i32, Move, Option<bool>)> {
         let move_list = position.legal_moves();
         let turn = position.turn() as usize;
         let killers = self.killer_move_table[ply];
 
-        let mut scored: Vec<(i32, Move)> = Vec::with_capacity(move_list.len());
+        let mut scored: Vec<(i32, Move, Option<bool>)> = Vec::with_capacity(move_list.len());
         for m in move_list {
+            let mut above_0_see = None;
             let score = if Some(m) == *hash_move {
                 2_000_000_000 // Hash move is highest priority
             } else if let Some(victim) = m.capture() {
@@ -560,6 +570,7 @@ impl Negamax {
                 if !super::see::see(position, &m, 0) {
                     -1_000_000_000 + mvv_lva // after quiets
                 } else {
+                    above_0_see = Some(true);
                     1_000_000_000 + mvv_lva
                 }
             } else if killers.contains_move(m) {
@@ -569,11 +580,11 @@ impl Negamax {
                 self.history_table[turn][m.from().unwrap() as usize][m.to() as usize]
             };
 
-            scored.push((score, m));
+            scored.push((score, m, above_0_see));
         }
 
         // sort the scores
-        scored.sort_unstable_by_key(|&(s, _)| -s);
+        scored.sort_unstable_by_key(|&(s, _, _)| -s);
         scored
     }
 
