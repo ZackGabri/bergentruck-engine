@@ -10,6 +10,9 @@ pub mod eval;
 pub mod negamax;
 pub mod see;
 
+#[cfg(test)]
+mod tests;
+
 pub static FAIL_LOWS: AtomicUsize = AtomicUsize::new(0);
 pub static FAIL_HIGHS: AtomicUsize = AtomicUsize::new(0);
 pub static ASP_ITERS: AtomicUsize = AtomicUsize::new(0);
