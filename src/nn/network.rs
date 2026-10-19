@@ -105,6 +105,16 @@ impl Accumulator {
     }
 }
 
+/// Builds both perspective accumulators from scratch. Index 0 = White's view, 1 = Black's.
+/// Use at the root of a search.
+pub fn refresh(position: &Chess) -> [Accumulator; 2] {
+    let mut acc = [Accumulator::default(); 2];
+    for (sq, piece) in position.board().iter() {
+        add_piece(&mut acc, piece, sq);
+    }
+    acc
+}
+
 fn add_piece(acc: &mut [Accumulator; 2], piece: Piece, sq: Square) {
     acc[0].add_feature(feature_index(Color::White, piece, sq), &NNUE);
     acc[1].add_feature(feature_index(Color::Black, piece, sq), &NNUE);

@@ -357,7 +357,7 @@ impl Negamax {
 
             self.accumulators[ply + 1] = self.accumulators[ply];
             network::apply_move(&mut self.accumulators[ply + 1], &mov, turn);
-            
+
             self.node_count += 1;
 
             let mut score = -MATE_SCORE;
@@ -479,8 +479,8 @@ impl Negamax {
 
     #[inline(always)]
     fn static_eval(&mut self, position: &Chess, ply: usize) -> i32 {
-        // super::eval::evaluate(position)
-        network::evaluate(&self.accumulators[ply], position.turn())
+        super::eval::evaluate(position)
+        // network::evaluate(&self.accumulators[ply], position.turn())
     }
 
     pub fn has_reached_limit(&self) -> bool {
