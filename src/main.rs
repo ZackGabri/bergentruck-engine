@@ -31,12 +31,65 @@ fn main() -> Result<(), anyhow::Error> {
     let mut stdout = io::stdout();
     let mut history = MoveHistory::new();
 
-    // bench
-    if let Some(arg) = std::env::args().nth(1)
-        && arg == "bench"
-    {
-        bench::bench()?;
-        std::process::exit(0);
+    // Flatten all arguments, including space-separated string arguments 
+    let tokens: Vec<String> = std::env::args()
+        .skip(1)
+        .flat_map(|s| {
+            s.split_whitespace()
+                .map(String::from)
+                .collect::<Vec<String>>() 
+        })
+        .collect();
+
+    
+    // Handle command-line arguments
+    if !tokens.is_empty() {
+        'cli_parser: {
+            let mut iter = tokens.iter().map(|s| s.as_str());
+
+            while let Some(cmd) = iter.next() {
+                println!("Parsed keyword: {cmd}");
+                match cmd {
+                    "bench" => {
+                        bench::bench()?;
+                        std::process::exit(0);
+                    }
+                    "genfens" => {
+                        let n: usize = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+                        let seed: u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+
+                        if n == 0 && seed == 0 {
+                            println!("info string Invalid genfens N or seed S.");
+                            std::process::exit(1);
+                        }
+                        
+                        let next_token = iter.next();
+                        let book_arg = if next_token == Some("book") {
+                            iter.next()
+                        } else {
+                            next_token
+                        };
+
+                        let book_path = match book_arg {
+                            Some("None") | None => None,
+                            Some(path) => Some(path),
+                        };
+
+                        let extra = iter.next();
+
+                        search::genfens::generate_fens(n, seed, book_path, extra);
+                        std::process::exit(0);
+                    }
+                    "quit" => {
+                        std::process::exit(0);
+                    }
+                    unknown => {
+                        eprintln!("info string Unknown command: {}", unknown);
+                        break 'cli_parser;
+                    }
+                }
+            }
+        }
     }
 
     loop {

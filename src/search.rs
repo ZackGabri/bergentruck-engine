@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub mod eval;
 pub mod negamax;
 pub mod see;
+pub mod genfens;
 
 #[cfg(test)]
 mod tests;
