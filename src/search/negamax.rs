@@ -108,6 +108,8 @@ pub struct Negamax {
 }
 
 impl Negamax {
+    const MAX_HISTORY: i32 = 16_384;
+
     pub fn new() -> Self {
         Self {
             node_count: 0,
@@ -440,7 +442,12 @@ impl Negamax {
                     } as usize;
                     let to = mov.to() as usize;
 
-                    self.history_table[turn as usize][from][to] += (depth * depth) as i32;
+                    let history = &mut self.history_table[turn as usize][from][to];
+
+                    let bonus = (depth * depth) as i32;
+                    let bonus = bonus.clamp(-Self::MAX_HISTORY, Self::MAX_HISTORY);
+
+                    *history += bonus - *history * bonus.abs() / Self::MAX_HISTORY;
                     self.store_killer_move(ply, mov);
                 }
 
