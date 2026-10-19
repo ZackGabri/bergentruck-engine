@@ -54,14 +54,12 @@ pub fn generate_fens(
         accepted += 1;
     }
 
-    /*
     let elapsed = start_time.elapsed();
     let elapsed_seconds = elapsed.as_secs_f64();
     let positions_per_second = n as f64 / elapsed_seconds.max(f64::EPSILON);
     println!(
-        "info string genfens generated {n} positions in {elapsed_seconds:.3} seconds ({positions_per_second:.2} positions/second)"
+        "info string genfens-summary generated {n} positions in {elapsed_seconds:.3} seconds ({positions_per_second:.2} positions/second)"
     );
-    */
 
     Ok(())
 }
