@@ -60,7 +60,7 @@ const BENCH_POSITIONS: [&str; 50] = [
     "2r2b2/5p2/5k2/p1r1pP2/P2pB3/1P3P2/K1P3R1/7R w - - 23 93",
 ];
 
-const BENCH_DEPTH: usize = 10;
+pub const BENCH_DEPTH: usize = 10;
 const BENCH_HASH: usize = 128;
 
 pub fn bench() -> anyhow::Result<()> {
@@ -89,7 +89,7 @@ pub fn bench() -> anyhow::Result<()> {
             bench: true,
             ..Default::default()
         };
-        let (_, node_count) = crate::search::search(&pos, None, search_options);
+        let (_, node_count, _) = crate::search::search(&pos, None, search_options);
 
         let duration = start_time.elapsed();
         total_nodes += node_count;

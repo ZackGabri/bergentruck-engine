@@ -1,4 +1,4 @@
-use shakmaty::{Chess, Color, Position, Role, Piece};
+use shakmaty::{Chess, Color, Piece, Position, Role};
 
 pub struct TrainExample {
     pub features: [f32; 64], // Board representation
@@ -10,12 +10,12 @@ pub fn piece_to_f32(piece: Option<Piece>) -> f32 {
         None => 0.0,
         Some(p) => {
             let value = match p.role {
-                Role::Pawn   => 0.1,
+                Role::Pawn => 0.1,
                 Role::Knight => 0.3,
                 Role::Bishop => 0.4,
-                Role::Rook   => 0.5,
-                Role::Queen  => 0.9,
-                Role::King   => 1.0,
+                Role::Rook => 0.5,
+                Role::Queen => 0.9,
+                Role::King => 1.0,
             };
 
             match p.color {

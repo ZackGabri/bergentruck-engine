@@ -7,16 +7,16 @@ use shakmaty::uci::UciMove;
 use shakmaty::{Chess, Position};
 
 use crate::history::MoveHistory;
+use crate::nn::data;
 use crate::options::EngineOptions;
 use crate::search::SearchOptions;
-use crate::nn::data;
 
 mod bench;
 mod history;
+mod nn;
 mod options;
 mod search;
 mod transposition_table;
-mod nn;
 
 pub fn engine_options() -> &'static EngineOptions {
     static ENGINE_OPTIONS: OnceLock<EngineOptions> = OnceLock::new();
@@ -31,63 +31,31 @@ fn main() -> Result<(), anyhow::Error> {
     let mut stdout = io::stdout();
     let mut history = MoveHistory::new();
 
-    // Flatten all arguments, including space-separated string arguments 
+    // Flatten all arguments, including space-separated string arguments
     let tokens: Vec<String> = std::env::args()
         .skip(1)
         .flat_map(|s| {
             s.split_whitespace()
                 .map(String::from)
-                .collect::<Vec<String>>() 
+                .collect::<Vec<String>>()
         })
         .collect();
 
-    
-    // Handle command-line arguments
     if !tokens.is_empty() {
-        'cli_parser: {
-            let mut iter = tokens.iter().map(|s| s.as_str());
-
-            while let Some(cmd) = iter.next() {
-                println!("Parsed keyword: {cmd}");
-                match cmd {
-                    "bench" => {
-                        bench::bench()?;
-                        std::process::exit(0);
-                    }
-                    "genfens" => {
-                        let n: usize = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-                        let seed: u64 = iter.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-
-                        if n == 0 && seed == 0 {
-                            println!("info string Invalid genfens N or seed S.");
-                            std::process::exit(1);
-                        }
-                        
-                        let next_token = iter.next();
-                        let book_arg = if next_token == Some("book") {
-                            iter.next()
-                        } else {
-                            next_token
-                        };
-
-                        let book_path = match book_arg {
-                            Some("None") | None => None,
-                            Some(path) => Some(path),
-                        };
-
-                        let extra = iter.next();
-
-                        search::genfens::generate_fens(n, seed, book_path, extra);
-                        std::process::exit(0);
-                    }
-                    "quit" => {
-                        std::process::exit(0);
-                    }
-                    unknown => {
-                        eprintln!("info string Unknown command: {}", unknown);
-                        break 'cli_parser;
-                    }
-                }
+        match tokens[0].as_str() {
+            "bench" => {
+                bench::bench()?;
+                return Ok(());
+            }
+            "genfens" => {
+                let (n, seed, book_path, extra) =
+                    search::genfens::parse_genfens_args(&tokens[1..])?;
+                search::genfens::generate_fens(n, seed, book_path, extra.as_deref())?;
+                return Ok(());
+            }
+            "quit" => return Ok(()),
+            unknown => {
+                eprintln!("info string Unknown command: {}", unknown);
             }
         }
     }
@@ -191,7 +159,7 @@ fn main() -> Result<(), anyhow::Error> {
                         .ok(),
                     ..Default::default()
                 };
-                let (m, _) = search::search(&pos, Some(&mut history), search_options);
+                let (m, _, _) = search::search(&pos, Some(&mut history), search_options);
 
                 if let Some(best_move) = m {
                     println!("bestmove {}", best_move.to_uci(pos.castles().mode()));
@@ -234,7 +202,7 @@ fn main() -> Result<(), anyhow::Error> {
                     ..Default::default()
                 };
 
-                let (m, _) = search::search(&pos, Some(&mut history), search_options);
+                let (m, _, _) = search::search(&pos, Some(&mut history), search_options);
 
                 if let Some(best_move) = m {
                     println!("bestmove {}", best_move.to_uci(pos.castles().mode()));
