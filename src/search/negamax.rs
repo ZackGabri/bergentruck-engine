@@ -3,9 +3,9 @@ use std::sync::OnceLock;
 use shakmaty::{Chess, Move, MoveList, Position};
 
 use crate::history::MoveHistory;
+use crate::nn::network;
 use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
-use crate::nn::network;
 
 pub struct PVariation {
     pub length: usize,
@@ -339,14 +339,8 @@ impl Negamax {
                 }
 
                 // SEE Pruning
-                if move_index > 0 && depth <= 6 {
-                    // minimum threshold is 0 anyway, if it already failed to pass it then no point continuing
-                    if let Some(passed) = passed_0see
-                        && !passed
-                    {
-                        continue;
-                    }
-
+                let above_0_see = passed_0see.unwrap_or(false);
+                if move_index > 0 && depth <= 6 && !above_0_see {
                     let depth = depth as i32;
 
                     let see_threshold = if is_quiet {
