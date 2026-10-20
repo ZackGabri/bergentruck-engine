@@ -6,7 +6,7 @@ const QA: i16 = 255;
 const QB: i16 = 64;
 
 static NNUE: Network =
-    unsafe { std::mem::transmute(*include_bytes!("quantised_v1.bin")) };
+    unsafe { std::mem::transmute(*include_bytes!("quantised_v2.bin")) };
 
 #[inline]
 /// Square Clipped ReLU - Activation Function.
