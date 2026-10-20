@@ -479,8 +479,8 @@ impl Negamax {
 
     #[inline(always)]
     fn static_eval(&mut self, position: &Chess, ply: usize) -> i32 {
-        super::eval::evaluate(position)
-        // network::evaluate(&self.accumulators[ply], position.turn())
+        // super::eval::evaluate(position)
+        network::evaluate(&self.accumulators[ply], position.turn())
     }
 
     pub fn has_reached_limit(&self) -> bool {
