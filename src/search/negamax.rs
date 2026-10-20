@@ -5,6 +5,7 @@ use shakmaty::{Chess, Move, MoveList, Position};
 use crate::history::MoveHistory;
 use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
+use crate::nn::network;
 
 pub struct PVariation {
     pub length: usize,
@@ -102,6 +103,7 @@ pub struct Negamax {
     improving_table: [ImprovingStackEntry; MAX_PLY],
     history_table: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
+    accumulators: [[network::Accumulator; 2]; MAX_PLY],
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
     pub seldepth: usize,
@@ -114,6 +116,7 @@ impl Negamax {
             improving_table: [ImprovingStackEntry::default(); MAX_PLY],
             history_table: [[[0; 64]; 64]; 2],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
+            accumulators: [[network::Accumulator::default(); 2]; MAX_PLY],
             max_hard_nodes: None,
             hard_deadline: None,
             seldepth: 0,
@@ -136,6 +139,10 @@ impl Negamax {
         pv: &mut PVariation,
         pv_node: bool,
     ) -> i32 {
+        if ply == 0 {
+            self.accumulators[0] = network::refresh(position);
+        }
+
         if depth == 0 {
             return self.quiescence(position, &mut alpha, beta, ply);
         }
@@ -145,7 +152,7 @@ impl Negamax {
         }
 
         if ply >= MAX_PLY - 1 {
-            return self.static_eval(position);
+            return self.static_eval(position, ply);
         }
 
         if ply > self.seldepth {
@@ -202,7 +209,7 @@ impl Negamax {
             self.improving_table[ply].static_eval = None;
             None
         } else {
-            let eval = self.static_eval(position);
+            let eval = self.static_eval(position, ply);
             self.improving_table[ply].static_eval = Some(eval);
 
             let past_eval = if ply >= 2 && self.improving_table[ply - 2].static_eval.is_some() {
@@ -229,7 +236,7 @@ impl Negamax {
         if !in_check && !is_root {
             // reverse futility pruning
             if depth <= 4 {
-                let static_eval = *static_eval.get_or_insert(self.static_eval(position));
+                let static_eval = *static_eval.get_or_insert(self.static_eval(position, ply));
                 let margin = if improving { 50 * depth } else { 80 * depth };
                 if static_eval >= beta + margin as i32 {
                     return static_eval;
@@ -244,6 +251,7 @@ impl Negamax {
 
                 if non_pawns.any() {
                     let null_position = position.clone().swap_turn().unwrap();
+                    self.accumulators[ply + 1] = self.accumulators[ply];
                     let reduction = 3 + depth / 3;
                     let null_score = -self.negamax(
                         // search with zero window
@@ -355,6 +363,9 @@ impl Negamax {
 
             let mut position = position.clone();
             position.play_unchecked(mov);
+
+            self.accumulators[ply + 1] = self.accumulators[ply];
+            network::apply_move(&mut self.accumulators[ply + 1], &mov, turn);
 
             self.node_count += 1;
 
@@ -476,8 +487,9 @@ impl Negamax {
     }
 
     #[inline(always)]
-    fn static_eval(&mut self, position: &Chess) -> i32 {
-        super::eval::evaluate(position)
+    fn static_eval(&mut self, position: &Chess, ply: usize) -> i32 {
+        // super::eval::evaluate(position)
+        network::evaluate(&self.accumulators[ply], position.turn())
     }
 
     pub fn has_reached_limit(&self) -> bool {
@@ -499,14 +511,14 @@ impl Negamax {
     }
 
     fn quiescence(&mut self, position: &Chess, alpha: &mut i32, beta: i32, ply: usize) -> i32 {
-        let static_eval = self.static_eval(position);
+        let static_eval = self.static_eval(position, ply);
 
         if self.has_reached_limit() {
             return static_eval;
         }
 
         if ply >= MAX_PLY - 1 {
-            return static_eval;
+            return self.static_eval(position, ply);
         }
 
         if ply > self.seldepth {
@@ -531,6 +543,8 @@ impl Negamax {
             }
 
             let mut position = position.clone();
+            self.accumulators[ply + 1] = self.accumulators[ply];
+            network::apply_move(&mut self.accumulators[ply + 1], &capture, position.turn());
             position.play_unchecked(capture);
 
             let score = -self.quiescence(&position, &mut -beta, -*alpha, ply + 1);

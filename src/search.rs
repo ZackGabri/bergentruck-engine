@@ -7,6 +7,7 @@ use std::time::Duration;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod eval;
+pub mod genfens;
 pub mod negamax;
 pub mod see;
 
@@ -70,7 +71,7 @@ pub fn search(
     position: &Chess,
     history: Option<&mut MoveHistory>,
     search_options: SearchOptions,
-) -> (Option<Move>, u64) {
+) -> (Option<Move>, u64, i32) {
     let SearchOptions {
         max_depth,
         max_hard_nodes,
@@ -114,6 +115,7 @@ pub fn search(
     let mut delta = WINDOW_SIZE;
 
     let mut depth = 1;
+    let mut completed_score = None;
 
     let mut pv = PVariation::default();
     while depth <= max_depth {
@@ -177,6 +179,7 @@ pub fn search(
             beta = std::cmp::min(score + WINDOW_SIZE, MATE_SCORE);
         }
 
+        completed_score = Some(score);
         pv = iter_pv; // search passes, so we can update the pv
 
         if !bench {
@@ -205,7 +208,11 @@ pub fn search(
         println!("info depth 0 score cp 0 nodes 0 nps 0 hashfull -1 time -1 pv e2e2 e2e1 e1e2");
     }
 
-    (pv.line[0], negamax.node_count)
+    (
+        pv.line[0],
+        negamax.node_count,
+        completed_score.unwrap_or_default(),
+    )
 }
 
 #[derive(Default, Debug)]

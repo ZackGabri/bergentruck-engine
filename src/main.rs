@@ -7,11 +7,13 @@ use shakmaty::uci::UciMove;
 use shakmaty::{Chess, Position};
 
 use crate::history::MoveHistory;
+use crate::nn::data;
 use crate::options::EngineOptions;
 use crate::search::SearchOptions;
 
 mod bench;
 mod history;
+mod nn;
 mod options;
 mod search;
 mod transposition_table;
@@ -29,12 +31,33 @@ fn main() -> Result<(), anyhow::Error> {
     let mut stdout = io::stdout();
     let mut history = MoveHistory::new();
 
-    // bench
-    if let Some(arg) = std::env::args().nth(1)
-        && arg == "bench"
-    {
-        bench::bench()?;
-        std::process::exit(0);
+    // Flatten all arguments, including space-separated string arguments
+    let tokens: Vec<String> = std::env::args()
+        .skip(1)
+        .flat_map(|s| {
+            s.split_whitespace()
+                .map(String::from)
+                .collect::<Vec<String>>()
+        })
+        .collect();
+
+    if !tokens.is_empty() {
+        match tokens[0].as_str() {
+            "bench" => {
+                bench::bench()?;
+                return Ok(());
+            }
+            "genfens" => {
+                let (n, seed, book_path, extra) =
+                    search::genfens::parse_genfens_args(&tokens[1..])?;
+                search::genfens::generate_fens(n, seed, book_path, extra.as_deref())?;
+                return Ok(());
+            }
+            "quit" => return Ok(()),
+            unknown => {
+                eprintln!("info string Unknown command: {}", unknown);
+            }
+        }
     }
 
     loop {
@@ -136,7 +159,7 @@ fn main() -> Result<(), anyhow::Error> {
                         .ok(),
                     ..Default::default()
                 };
-                let (m, _) = search::search(&pos, Some(&mut history), search_options);
+                let (m, _, _) = search::search(&pos, Some(&mut history), search_options);
 
                 if let Some(best_move) = m {
                     println!("bestmove {}", best_move.to_uci(pos.castles().mode()));
@@ -179,7 +202,7 @@ fn main() -> Result<(), anyhow::Error> {
                     ..Default::default()
                 };
 
-                let (m, _) = search::search(&pos, Some(&mut history), search_options);
+                let (m, _, _) = search::search(&pos, Some(&mut history), search_options);
 
                 if let Some(best_move) = m {
                     println!("bestmove {}", best_move.to_uci(pos.castles().mode()));
@@ -212,6 +235,9 @@ fn main() -> Result<(), anyhow::Error> {
                 if let Err(err) = bench::bench() {
                     println!("Bench Failed! {:?}", err);
                 }
+            }
+            ["test", ..] => {
+                println!("Features: {:?}", data::parse_board_to_features(&pos));
             }
 
             [] => {}
