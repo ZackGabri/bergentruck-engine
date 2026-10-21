@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use shakmaty::{Chess, Color, Position};
 
 /*

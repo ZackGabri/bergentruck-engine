@@ -236,6 +236,11 @@ fn main() -> Result<(), anyhow::Error> {
                     println!("Bench Failed! {:?}", err);
                 }
             }
+            ["aspiration", ..] => {
+                if let Err(err) = bench::bench_windows() {
+                    println!("Bench Failed! {:?}", err);
+                }
+            }
             ["test", ..] => {
                 println!("Features: {:?}", data::parse_board_to_features(&pos));
             }

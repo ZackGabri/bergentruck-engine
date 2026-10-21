@@ -63,13 +63,26 @@ const BENCH_POSITIONS: [&str; 50] = [
 pub const BENCH_DEPTH: usize = 10;
 const BENCH_HASH: usize = 128;
 
-pub fn bench() -> anyhow::Result<()> {
-    let hash_before_starting = engine_options().get_number("Hash");
+struct BenchResult {
+    nodes: u64,
+    millis: u128,
+    fail_lows: usize,
+    fail_highs: usize,
+    asp_iters: usize,
+}
 
-    engine_options()
-        .set("Hash", &BENCH_HASH.to_string())
-        .unwrap();
-    crate::transposition_table::resize(); // this also clears the existing hash table
+impl BenchResult {
+    fn nps(&self) -> u64 {
+        self.nodes * 1000 / self.millis.max(1) as u64
+    }
+
+    fn fail_rate(&self) -> f64 {
+        (self.fail_lows + self.fail_highs) as f64 * 100.0 / self.asp_iters.max(1) as f64
+    }
+}
+
+fn run_bench(aspiration_window: Option<i32>, verbose: bool) -> anyhow::Result<BenchResult> {
+    crate::transposition_table::clear();
 
     FAIL_LOWS.store(0, Ordering::Relaxed);
     FAIL_HIGHS.store(0, Ordering::Relaxed);
@@ -87,6 +100,7 @@ pub fn bench() -> anyhow::Result<()> {
         let search_options = SearchOptions {
             max_depth: Some(BENCH_DEPTH),
             bench: true,
+            aspiration_window,
             ..Default::default()
         };
         let (_, node_count, _) = crate::search::search(&pos, None, search_options);
@@ -94,34 +108,99 @@ pub fn bench() -> anyhow::Result<()> {
         let duration = start_time.elapsed();
         total_nodes += node_count;
 
-        println!(
-            "position {:2}/{:2}: nodes {} time {}",
-            i + 1,
-            BENCH_POSITIONS.len(),
-            node_count,
-            duration.as_millis()
-        );
+        if verbose {
+            println!(
+                "position {:2}/{:2}: nodes {} time {}",
+                i + 1,
+                BENCH_POSITIONS.len(),
+                node_count,
+                duration.as_millis()
+            );
+        }
     }
 
-    let bench_duration = bench_start.elapsed().as_millis();
-    let nps = total_nodes * 1000 / bench_duration as u64;
+    Ok(BenchResult {
+        nodes: total_nodes,
+        millis: bench_start.elapsed().as_millis(),
+        fail_lows: FAIL_LOWS.load(Ordering::Relaxed),
+        fail_highs: FAIL_HIGHS.load(Ordering::Relaxed),
+        asp_iters: ASP_ITERS.load(Ordering::Relaxed),
+    })
+}
+
+pub fn bench() -> anyhow::Result<()> {
+    let hash_before_starting = engine_options().get_number("Hash");
+    engine_options()
+        .set("Hash", &BENCH_HASH.to_string())
+        .unwrap();
+    crate::transposition_table::resize();
+
+    let result = run_bench(None, true)?;
+
     println!("--------------------------------");
-    println!("Total bench duration: {bench_duration}ms");
-
-    let lows = FAIL_LOWS.load(Ordering::Relaxed);
-    let highs = FAIL_HIGHS.load(Ordering::Relaxed);
-    let iters = ASP_ITERS.load(Ordering::Relaxed).max(1);
+    println!("Total bench duration: {}ms", result.millis);
     println!(
-        "fail lows {lows}, fail highs {highs}, aspiration iters {iters}, fail rate {:.1}%",
-        (lows + highs) as f64 * 100.0 / iters as f64
+        "fail lows {}, fail highs {}, aspiration iters {}, fail rate {:.1}%",
+        result.fail_lows,
+        result.fail_highs,
+        result.asp_iters,
+        result.fail_rate()
     );
-
-    println!("{total_nodes} nodes {nps} nps");
+    println!("{} nodes {} nps", result.nodes, result.nps());
 
     engine_options()
         .set("Hash", &hash_before_starting.to_string())
         .unwrap();
     crate::transposition_table::resize();
+
+    Ok(())
+}
+
+pub fn bench_windows() -> anyhow::Result<()> {
+    const MIN_WINDOW: i32 = 10;
+    const MAX_WINDOW: i32 = 100;
+
+    let hash_before_starting = engine_options().get_number("Hash");
+    engine_options()
+        .set("Hash", &BENCH_HASH.to_string())
+        .unwrap();
+    crate::transposition_table::resize();
+
+    let mut results: Vec<(i32, BenchResult)> = Vec::new();
+    for window in MIN_WINDOW..=MAX_WINDOW {
+        let result = match run_bench(Some(window), false) {
+            Ok(result) => result,
+            Err(e) => {
+                // restore hash before bailing out
+                engine_options()
+                    .set("Hash", &hash_before_starting.to_string())
+                    .unwrap();
+                crate::transposition_table::resize();
+                return Err(e);
+            }
+        };
+
+        println!(
+            "window {}: nodes {} f-lows {} f-highs {} iters {} fail rate {:.1}%",
+            window,
+            result.nodes,
+            result.fail_lows,
+            result.fail_highs,
+            result.asp_iters,
+            result.fail_rate()
+        );
+        results.push((window, result));
+    }
+
+    engine_options()
+        .set("Hash", &hash_before_starting.to_string())
+        .unwrap();
+    crate::transposition_table::resize();
+
+    println!("--------------------------------");
+    if let Some((window, result)) = results.iter().min_by_key(|(_, r)| r.nodes) {
+        println!("fewest nodes: window {window} ({} nodes)", result.nodes);
+    }
 
     Ok(())
 }

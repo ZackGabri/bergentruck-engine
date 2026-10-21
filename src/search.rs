@@ -21,6 +21,7 @@ pub static ASP_ITERS: AtomicUsize = AtomicUsize::new(0);
 pub const MATE_SCORE: i32 = 100_000;
 pub const MATE_THRESHOLD: i32 = MATE_SCORE - 1000;
 pub const MAX_PLY: usize = 128;
+pub const DEFAULT_ASPIRATION_WINDOW: i32 = 18;
 
 // Helper function to print search info
 fn print_info(
@@ -65,6 +66,7 @@ pub struct SearchOptions {
     pub hard_deadline: Option<minstant::Instant>,
     pub soft_deadline: Option<minstant::Instant>,
     pub bench: bool,
+    pub aspiration_window: Option<i32>,
 }
 
 pub fn search(
@@ -79,6 +81,7 @@ pub fn search(
         hard_deadline,
         soft_deadline,
         bench,
+        aspiration_window,
     } = search_options;
 
     let mut negamax = Negamax::new();
@@ -111,8 +114,8 @@ pub fn search(
     // aspiration window variables
     let mut alpha = -MATE_SCORE;
     let mut beta = MATE_SCORE;
-    const WINDOW_SIZE: i32 = 18;
-    let mut delta = WINDOW_SIZE;
+    let window_size = aspiration_window.unwrap_or(DEFAULT_ASPIRATION_WINDOW);
+    let mut delta = window_size;
 
     let mut depth = 1;
     let mut completed_score = None;
@@ -174,9 +177,9 @@ pub fn search(
             }
 
             // Reset parameters if search passes
-            delta = WINDOW_SIZE;
-            alpha = std::cmp::max(-MATE_SCORE, score - WINDOW_SIZE);
-            beta = std::cmp::min(score + WINDOW_SIZE, MATE_SCORE);
+            delta = window_size;
+            alpha = std::cmp::max(-MATE_SCORE, score - window_size);
+            beta = std::cmp::min(score + window_size, MATE_SCORE);
         }
 
         completed_score = Some(score);
