@@ -1,11 +1,12 @@
 # Bergentrück Chess Engine
 ## Overview
-Burgentruck (yes, we spelt it wrong) is a rust chess engine developed by ZackGabri and Tamplite Siphron Kents, the latter of whom developed the Dragonrose chess engine.
+Burgentruck (yes, we spelt it wrong) is a Rust chess engine developed by ZackGabri and Tamplite Siphron Kents, the latter of whom developed the Dragonrose chess engine.
 
 ## Specifications
 ### Strength 
 | Version | CCRL 2+1 |
 |:-------:|:--------:|
+|  v0.3   |  ~3042   |
 |  v0.2   |  ~2434   |
 |  v0.1   |  ~1879   |
 
@@ -28,8 +29,9 @@ Burgentruck uses [shakmaty crate](https://crates.io/crates/Shakmaty) for board r
 - Time management: Hard and soft time management
 
 ### Evaluation
-Currently using basic material + piece square tables (PST / PSQT). 
-Neural networks working in progress.
+Currently using NNUE with a (768 -> 128)x2 -> 1 net trained on 1 million self-play games, played at 5000 soft nodes.
+Trainer used and inference code adapted from: [Bullet](https://github.com/jw1912/bullet)
+Legacy HCE evaluation code remains in the codebase.
 Possibly other NN architectures / ML techniques in the future...
 
 ## Etymology
@@ -38,6 +40,6 @@ Burgentruck (Bergentrück) is a reference to Undertale / Deltarune, both games d
 Note that the official name for the chess engine is "Burgentruck", despite the fact it was a typo.
 
 ## Changelogs
-v0.3 (dev): Add improving heuristics and fix bugs. Add NNUE. <br>
+v0.3 (dev): Add improving heuristics and fix bugs. Add NNUE and iterated on nets. <br>
 v0.2: Bugfixes and added more search enhancements up to IIR and soft time management. <br>
 v0.1: First release. Search progression up to NMP except aspiration windows, which failed to gain.
