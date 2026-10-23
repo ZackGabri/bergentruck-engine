@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use shakmaty::{Chess, Color, Piece, Position, Role};
 
 pub struct TrainExample {

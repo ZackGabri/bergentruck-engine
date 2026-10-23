@@ -3,9 +3,9 @@ use std::sync::OnceLock;
 use shakmaty::{Chess, Move, MoveList, Position};
 
 use crate::history::MoveHistory;
+use crate::nn::network;
 use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
-use crate::nn::network;
 
 pub struct PVariation {
     pub length: usize,

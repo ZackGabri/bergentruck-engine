@@ -5,8 +5,7 @@ const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
 
-static NNUE: Network =
-    unsafe { std::mem::transmute(*include_bytes!("networks/Rudinn_I.bin")) };
+static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Rudinn_I.bin")) };
 
 #[inline]
 /// Square Clipped ReLU - Activation Function.
@@ -26,7 +25,7 @@ pub struct Network {
     /// Vector with dimension `HIDDEN_SIZE`.
     /// Values have quantization of QA.
     feature_bias: Accumulator,
-    /// Column-Major `1 x (2 * HIDDEN_SIZE)`matrix, 
+    /// Column-Major `1 x (2 * HIDDEN_SIZE)`matrix,
     /// we use it like this to make the code nicer in `Network::evaluate`.
     /// Values have quantization of QB.
     output_weights: [i16; 2 * HIDDEN_SIZE],
@@ -39,7 +38,6 @@ impl Network {
     /// Calculates the output of the network, starting from the already
     /// calculated hidden layer (done efficiently during makemoves).
     pub fn evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
-        // Initialise output.
         let mut output = 0;
 
         // Feed forward for both Side-To-Move and Not-Side-To-Move accumulators respectively
@@ -50,10 +48,10 @@ impl Network {
             output += screlu(input) * i32::from(weight);
         }
 
-        output /= i32::from(QA);  // Reduce quantization from QA * QA * QB to QA * QB.
-        output += i32::from(self.output_bias);  // Add bias.
-        output *= SCALE;  // Apply eval scale.
-        output /= i32::from(QA) * i32::from(QB);  // Remove quantisation altogether.
+        output /= i32::from(QA); // Reduce quantization from QA * QA * QB to QA * QB.
+        output += i32::from(self.output_bias); // Add bias.
+        output *= SCALE; // Apply eval scale.
+        output /= i32::from(QA) * i32::from(QB); // Remove quantisation altogether.
 
         output
     }
@@ -80,26 +78,28 @@ fn feature_index(perspective: Color, piece: Piece, sq: Square) -> usize {
 }
 
 impl Accumulator {
-    /// Initialised with bias so we can just efficiently
-    /// operate on it afterwards.
-    pub fn new(net: &Network) -> Self {
-        net.feature_bias
-    }
-
     pub fn default() -> Self {
         NNUE.feature_bias
     }
 
     /// Add a feature to an accumulator.
     pub fn add_feature(&mut self, feature_idx: usize, net: &Network) {
-        for (i, d) in self.vals.iter_mut().zip(&net.feature_weights[feature_idx].vals) {
+        for (i, d) in self
+            .vals
+            .iter_mut()
+            .zip(&net.feature_weights[feature_idx].vals)
+        {
             *i += *d
         }
     }
 
     /// Remove a feature from an accumulator.
     pub fn remove_feature(&mut self, feature_idx: usize, net: &Network) {
-        for (i, d) in self.vals.iter_mut().zip(&net.feature_weights[feature_idx].vals) {
+        for (i, d) in self
+            .vals
+            .iter_mut()
+            .zip(&net.feature_weights[feature_idx].vals)
+        {
             *i -= *d
         }
     }
@@ -128,32 +128,107 @@ fn remove_piece(acc: &mut [Accumulator; 2], piece: Piece, sq: Square) {
 // Updates both accumulators for `mov`, played by `mover` (the side to move BEFORE the move).
 pub fn apply_move(acc: &mut [Accumulator; 2], mov: &Move, mover: Color) {
     match *mov {
-        Move::Normal { role, from, capture, to, promotion } => {
+        Move::Normal {
+            role,
+            from,
+            capture,
+            to,
+            promotion,
+        } => {
             remove_piece(acc, Piece { color: mover, role }, from);
             if let Some(captured) = capture {
-                remove_piece(acc, Piece { color: !mover, role: captured }, to);
+                remove_piece(
+                    acc,
+                    Piece {
+                        color: !mover,
+                        role: captured,
+                    },
+                    to,
+                );
             }
-            add_piece(acc, Piece { color: mover, role: promotion.unwrap_or(role) }, to);
+            add_piece(
+                acc,
+                Piece {
+                    color: mover,
+                    role: promotion.unwrap_or(role),
+                },
+                to,
+            );
         }
         Move::EnPassant { from, to } => {
             // the captured pawn sits on the destination file, on the mover's starting rank
             let captured_sq = Square::from_coords(to.file(), from.rank());
-            remove_piece(acc, Piece { color: mover, role: Role::Pawn }, from);
-            remove_piece(acc, Piece { color: !mover, role: Role::Pawn }, captured_sq);
-            add_piece(acc, Piece { color: mover, role: Role::Pawn }, to);
+            remove_piece(
+                acc,
+                Piece {
+                    color: mover,
+                    role: Role::Pawn,
+                },
+                from,
+            );
+            remove_piece(
+                acc,
+                Piece {
+                    color: !mover,
+                    role: Role::Pawn,
+                },
+                captured_sq,
+            );
+            add_piece(
+                acc,
+                Piece {
+                    color: mover,
+                    role: Role::Pawn,
+                },
+                to,
+            );
         }
         Move::Castle { king, rook } => {
             // shakmaty stores castling as king square -> rook square
             let rank = king.rank();
             let (king_to, rook_to) = if (rook as u32) > (king as u32) {
-                (Square::from_coords(File::G, rank), Square::from_coords(File::F, rank))
+                (
+                    Square::from_coords(File::G, rank),
+                    Square::from_coords(File::F, rank),
+                )
             } else {
-                (Square::from_coords(File::C, rank), Square::from_coords(File::D, rank))
+                (
+                    Square::from_coords(File::C, rank),
+                    Square::from_coords(File::D, rank),
+                )
             };
-            remove_piece(acc, Piece { color: mover, role: Role::King }, king);
-            remove_piece(acc, Piece { color: mover, role: Role::Rook }, rook);
-            add_piece(acc, Piece { color: mover, role: Role::King }, king_to);
-            add_piece(acc, Piece { color: mover, role: Role::Rook }, rook_to);
+            remove_piece(
+                acc,
+                Piece {
+                    color: mover,
+                    role: Role::King,
+                },
+                king,
+            );
+            remove_piece(
+                acc,
+                Piece {
+                    color: mover,
+                    role: Role::Rook,
+                },
+                rook,
+            );
+            add_piece(
+                acc,
+                Piece {
+                    color: mover,
+                    role: Role::King,
+                },
+                king_to,
+            );
+            add_piece(
+                acc,
+                Piece {
+                    color: mover,
+                    role: Role::Rook,
+                },
+                rook_to,
+            );
         }
         Move::Put { .. } => unreachable!("Poor truck doesn't understand this move..."),
     }
