@@ -1,12 +1,31 @@
 use shakmaty::{Chess, Color, File, Move, Piece, Position, Role, Square};
 
-const HIDDEN_SIZE: usize = 128;
+const HIDDEN_SIZE: usize = 1;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
 
-static NNUE: Network =
-    unsafe { std::mem::transmute(*include_bytes!("networks/Rudinn_I.bin")) };
+use std::sync::LazyLock;
+
+pub static NNUE: LazyLock<Network> = LazyLock::new(|| {
+    let bytes = include_bytes!("networks/Jigsawry.bin");
+    
+    // Ensure the file is large enough to contain our Network struct
+    let net_size = std::mem::size_of::<Network>();
+    assert!(
+        bytes.len() >= net_size, 
+        "Jigsawry.bin is too small: got {} bytes, expected at least {} bytes", 
+        bytes.len(), 
+        net_size
+    );
+
+    // Skip the 56-byte header and read unaligned bytes directly into the Network struct
+    let slice = &bytes[bytes.len() - net_size..];
+    unsafe {
+        std::ptr::read_unaligned(slice.as_ptr() as *const Network)
+    }
+});
+// static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Jigsawry.bin")) };
 
 #[inline]
 /// Square Clipped ReLU - Activation Function.
@@ -62,7 +81,7 @@ impl Network {
 /// A column of the feature-weights matrix.
 /// Note the `align(64)`.
 #[derive(Clone, Copy)]
-#[repr(C, align(64))]
+//#[repr(C, align(64))]
 pub struct Accumulator {
     vals: [i16; HIDDEN_SIZE],
 }
