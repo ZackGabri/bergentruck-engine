@@ -1,31 +1,15 @@
 use shakmaty::{Chess, Color, File, Move, Piece, Position, Role, Square};
+use std::sync::LazyLock;
 
 const HIDDEN_SIZE: usize = 1;
+const NET_BYTES: usize = 1544;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
 
-use std::sync::LazyLock;
-
-pub static NNUE: LazyLock<Network> = LazyLock::new(|| {
-    let bytes = include_bytes!("networks/Jigsawry.bin");
-    
-    // Ensure the file is large enough to contain our Network struct
-    let net_size = std::mem::size_of::<Network>();
-    assert!(
-        bytes.len() >= net_size, 
-        "Jigsawry.bin is too small: got {} bytes, expected at least {} bytes", 
-        bytes.len(), 
-        net_size
-    );
-
-    // Skip the 56-byte header and read unaligned bytes directly into the Network struct
-    let slice = &bytes[bytes.len() - net_size..];
-    unsafe {
-        std::ptr::read_unaligned(slice.as_ptr() as *const Network)
-    }
-});
 // static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Jigsawry.bin")) };
+static NNUE: LazyLock<Network> =
+    LazyLock::new(|| Network::load(include_bytes!("networks/Jigsawry.bin")));
 
 #[inline]
 /// Square Clipped ReLU - Activation Function.
@@ -41,7 +25,8 @@ fn screlu(x: i16) -> i32 {
 pub struct Network {
     /// Column-Major `HIDDEN_SIZE x 768` matrix.
     /// Values have quantization of QA.
-    feature_weights: [Accumulator; 768],
+    // feature_weights: [Accumulator; 768],
+    feature_weights: Vec<Accumulator>,
     /// Vector with dimension `HIDDEN_SIZE`.
     /// Values have quantization of QA.
     feature_bias: Accumulator,
@@ -76,6 +61,46 @@ impl Network {
 
         output
     }
+
+    pub fn load(bytes: &[u8]) -> Self {
+        assert!(bytes.len() >= NET_BYTES, "network file is too short");
+        let (weights, tail) = bytes.split_at(NET_BYTES);
+
+        // Everything after the weights should be the "bullet" filler.
+        assert!(
+            tail.chunks(6).all(|c| c == &b"bullet"[..c.len()]),
+            "unexpected bytes after network weights"
+        );
+
+        let mut it = weights
+            .chunks_exact(2)
+            .map(|c| i16::from_le_bytes([c[0], c[1]]));
+
+        let mut feature_weights = Vec::with_capacity(768);
+        for _ in 0..768 {
+            let mut vals = [0i16; HIDDEN_SIZE];
+            for v in vals.iter_mut() {
+                *v = it.next().unwrap();
+            }
+            feature_weights.push(Accumulator { vals });
+        }
+
+        let mut bias_vals = [0i16; HIDDEN_SIZE];
+        for v in bias_vals.iter_mut() {
+            *v = it.next().unwrap();
+        }
+        let feature_bias = Accumulator { vals: bias_vals };
+
+        let mut output_weights = [0i16; 2 * HIDDEN_SIZE];
+        for v in output_weights.iter_mut() {
+            *v = it.next().unwrap();
+        }
+
+        let output_bias = it.next().unwrap();
+        assert!(it.next().is_none(), "network file has trailing bytes");
+
+        Network { feature_weights, feature_bias, output_weights, output_bias }
+    }
 }
 
 /// A column of the feature-weights matrix.
@@ -99,12 +124,6 @@ fn feature_index(perspective: Color, piece: Piece, sq: Square) -> usize {
 }
 
 impl Accumulator {
-    /// Initialised with bias so we can just efficiently
-    /// operate on it afterwards.
-    pub fn new(net: &Network) -> Self {
-        net.feature_bias
-    }
-
     pub fn default() -> Self {
         NNUE.feature_bias
     }

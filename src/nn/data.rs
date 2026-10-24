@@ -1,3 +1,5 @@
+#[allow(dead_code)] 
+
 use shakmaty::{Chess, Color, Piece, Position, Role};
 
 pub struct TrainExample {
