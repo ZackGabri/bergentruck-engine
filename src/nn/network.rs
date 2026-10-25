@@ -5,7 +5,7 @@ const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
 
-static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Rudinn_II.bin")) };
+static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Rudinn_III.bin")) };
 
 #[inline]
 /// Square Clipped ReLU - Activation Function.
