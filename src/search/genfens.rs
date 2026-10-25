@@ -92,9 +92,9 @@ fn score_is_acceptable(score: i32) -> bool {
     (-MAX_ACCEPTED_SCORE..=MAX_ACCEPTED_SCORE).contains(&score)
 }
 
-pub fn parse_genfens_args(
-    tokens: &[String],
-) -> anyhow::Result<(usize, u64, Option<&str>, Option<String>)> {
+pub fn parse_genfens_args<'a>(
+    tokens: &'a [&str],
+) -> anyhow::Result<(usize, u64, Option<&'a str>, Option<String>)> {
     let n = tokens
         .first()
         .context("genfens requires a position count N")?
@@ -104,7 +104,7 @@ pub fn parse_genfens_args(
         bail!("genfens N must be greater than zero");
     }
 
-    if tokens.get(1).map(String::as_str) != Some("seed") {
+    if tokens.get(1) != Some(&"seed") {
         bail!("genfens syntax: genfens N seed S book <None|path> [extra args...]");
     }
 
@@ -114,28 +114,24 @@ pub fn parse_genfens_args(
         .parse::<u64>()
         .context("genfens seed S must be an unsigned 64-bit integer")?;
 
-    if tokens.get(3).map(String::as_str) != Some("book") {
+    if tokens.get(3) != Some(&"book") {
         bail!("genfens syntax: genfens N seed S book <None|path> [extra args...]");
     }
 
     let book = tokens
         .get(4)
         .context("genfens requires `None` or a book path after `book`")?;
-    let book_path = if book == "None" {
-        None
-    } else {
-        Some(book.as_str())
-    };
+    let book_path = if book == &"None" { None } else { Some(book) };
 
     let extra = tokens[5..]
         .iter()
-        .take_while(|token| token.as_str() != "quit")
-        .map(String::as_str)
+        .copied()
+        .take_while(|token| token != &"quit")
         .collect::<Vec<_>>()
         .join(" ");
     let extra = (!extra.is_empty()).then_some(extra);
 
-    Ok((n, seed, book_path, extra))
+    Ok((n, seed, book_path.copied(), extra))
 }
 
 fn load_book(path: &str) -> anyhow::Result<Vec<Chess>> {

@@ -32,32 +32,25 @@ fn main() -> Result<(), anyhow::Error> {
     let mut history = MoveHistory::new();
 
     // Flatten all arguments, including space-separated string arguments
-    let tokens: Vec<String> = std::env::args()
+    let args: Vec<String> = std::env::args()
         .skip(1)
-        .flat_map(|s| {
-            s.split_whitespace()
-                .map(String::from)
-                .collect::<Vec<String>>()
-        })
+        .flat_map(|s| s.split_whitespace().map(String::from).collect::<Vec<_>>())
         .collect();
 
+    let tokens: Vec<&str> = args.iter().map(String::as_str).collect();
     if !tokens.is_empty() {
-        match tokens[0].as_str() {
-            "bench" => {
-                bench::bench()?;
-                return Ok(());
-            }
-            "genfens" => {
-                let (n, seed, book_path, extra) =
-                    search::genfens::parse_genfens_args(&tokens[1..])?;
+        match tokens.as_slice() {
+            ["bench", ..] => return bench::bench(),
+            ["speedtest", iters @ ..] => return bench::speedtest(iters.join("").parse().ok()),
+            ["aspiration" | "aspirations", ..] => return bench::bench_windows(),
+            ["genfens", args @ ..] => {
+                let (n, seed, book_path, extra) = search::genfens::parse_genfens_args(args)?;
                 search::genfens::generate_fens(n, seed, book_path, extra.as_deref())?;
                 return Ok(());
             }
-            "quit" => return Ok(()),
-            unknown => {
-                eprintln!("info string Unknown command: {}", unknown);
-            }
-        }
+            ["quit", ..] => return Ok(()),
+            _ => {}
+        };
     }
 
     loop {
@@ -233,6 +226,11 @@ fn main() -> Result<(), anyhow::Error> {
             }
             ["bench", ..] => {
                 if let Err(err) = bench::bench() {
+                    println!("Bench Failed! {:?}", err);
+                }
+            }
+            ["speedtest", iters @ ..] => {
+                if let Err(err) = bench::speedtest(iters.join("").parse().ok()) {
                     println!("Bench Failed! {:?}", err);
                 }
             }

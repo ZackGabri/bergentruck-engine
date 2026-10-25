@@ -204,3 +204,46 @@ pub fn bench_windows() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub fn speedtest(iterations: Option<usize>) -> anyhow::Result<()> {
+    const DEFAULT_ITERATIONS: usize = 10;
+
+    let iterations = iterations.unwrap_or(DEFAULT_ITERATIONS);
+
+    let hash_before_starting = engine_options().get_number("Hash");
+    engine_options()
+        .set("Hash", &BENCH_HASH.to_string())
+        .unwrap();
+    crate::transposition_table::resize();
+
+    let mut results: Vec<u64> = Vec::new();
+    for i in 0..iterations {
+        let result = match run_bench(None, false) {
+            Ok(result) => result,
+            Err(e) => {
+                // restore hash before bailing out
+                engine_options()
+                    .set("Hash", &hash_before_starting.to_string())
+                    .unwrap();
+                crate::transposition_table::resize();
+                return Err(e);
+            }
+        };
+
+        let nps = result.nps();
+        results.push(nps);
+
+        println!("Run {}/{iterations}: {nps} nps", i + 1);
+    }
+
+    engine_options()
+        .set("Hash", &hash_before_starting.to_string())
+        .unwrap();
+    crate::transposition_table::resize();
+
+    println!("--------------------------------");
+    let average = results.iter().sum::<u64>() / iterations as u64;
+    println!("Average speed: {average} nps");
+
+    Ok(())
+}
