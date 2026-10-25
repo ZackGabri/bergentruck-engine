@@ -1,11 +1,11 @@
 use shakmaty::{Chess, Color, File, Move, Piece, Position, Role, Square};
 
-const HIDDEN_SIZE: usize = 128;
+const HIDDEN_SIZE: usize = 256;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
 
-static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Rudinn_II.bin")) };
+static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Hathy_I.bin")) };
 
 #[inline]
 /// Square Clipped ReLU - Activation Function.
