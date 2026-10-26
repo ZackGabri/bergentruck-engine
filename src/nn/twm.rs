@@ -11,6 +11,9 @@ const LAYER2_SIZE: u64 = 256;
 const LAYER3_SIZE: u64 = 256;
 const OUTPUT_SIZE: u64 = 1;
 
+pub type NetworkInput = [f64; INPUT_SIZE as usize];
+pub type NetworkOutput = [f64; OUTPUT_SIZE as usize];
+
 pub struct TWMNet {
     network_ptr: twm::PTWM_RNN_NETWORK,
 }
@@ -62,7 +65,7 @@ impl TWMNet {
         Ok(())
     }
 
-    pub fn advance(&mut self, inputs: [f64; INPUT_SIZE as usize]) {
+    pub fn advance(&mut self, inputs: NetworkInput) {
         unsafe {
             twm::TWMNetworkRNNAdvanceNetwork(
                 self.network_ptr,
@@ -72,7 +75,7 @@ impl TWMNet {
         }
     }
 
-    pub fn update(&mut self, expected_output: [f64; OUTPUT_SIZE as usize]) {
+    pub fn update(&mut self, expected_output: NetworkOutput) {
         unsafe {
             twm::TWMNetworkRNNUpdateNetwork(self.network_ptr, expected_output.as_ptr() as *mut _);
         }
@@ -81,6 +84,12 @@ impl TWMNet {
     pub fn update_learning_rate(&mut self, rate: f64) {
         unsafe {
             twm::TWMNetworkRNNUpdateLearningRate(self.network_ptr, rate);
+        }
+    }
+
+    pub fn reset(&mut self) {
+        unsafe {
+            twm::TWMNetworkRNNResetNetwork(self.network_ptr);
         }
     }
 
