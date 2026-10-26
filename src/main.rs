@@ -15,6 +15,7 @@ mod bench;
 mod history;
 mod nn;
 mod options;
+mod pgn_reader;
 mod search;
 mod transposition_table;
 
