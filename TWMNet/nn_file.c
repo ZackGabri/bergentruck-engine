@@ -49,6 +49,15 @@ char LoadDouble2DArray(FILE *f, double **arr, unsigned long long rows, unsigned 
 	return 1;
 }
 
+static void FreeDouble2DArray(double **arr, unsigned long long rows)
+{
+	if (!arr)
+		return;
+	for (unsigned long long i = 0; i < rows; i++)
+		free(arr[i]);
+	free(arr);
+}
+
 char TWMNetworkRNNExportNetwork(PTWM_RNN_NETWORK pNetwork, char *pFilePath)
 {
 	FILE *File = fopen(pFilePath, "wb");

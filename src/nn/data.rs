@@ -2,12 +2,13 @@
 
 use shakmaty::{Chess, Color, Piece, Position, Role};
 
-pub struct TrainExample {
-    pub features: [f32; 64], // Board representation
-    pub target: f32,         // Sigmoid of evaluation score, (0, 1)
+#[derive(Clone, Debug)]
+pub struct TrainingSample {
+    pub features: [f64; 64], // Board representation
+    pub target: f64,         // Sigmoid of evaluation score, (0, 1)
 }
 
-pub fn piece_to_f32(piece: Option<Piece>) -> f32 {
+pub fn piece_to_f64(piece: Option<Piece>) -> f64 {
     match piece {
         None => 0.0,
         Some(p) => {
@@ -28,10 +29,18 @@ pub fn piece_to_f32(piece: Option<Piece>) -> f32 {
     }
 }
 
-pub fn parse_board_to_features(board: &Chess) -> [f32; 64] {
+pub fn parse_board_to_features(board: &Chess) -> [f64; 64] {
     let mut features = [0.0; 64];
     for (square, piece) in board.board().iter() {
-        features[square as usize] = piece_to_f32(Some(piece));
+        features[square as usize] = piece_to_f64(Some(piece));
     }
     features
+}
+
+pub fn win_probability(centipawns: f64) -> f64 {
+    1.0 / (1.0 + 10f64.powf(-centipawns / 400.0))
+}
+
+pub fn centipawns(probability: f64) -> f64 {
+    -400.0 * (1.0 / probability - 1.0).log10()
 }
