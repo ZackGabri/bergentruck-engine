@@ -7,20 +7,12 @@ const HIDDEN_SIZE: usize = 256;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 
-// WARNING: QB = 64 ensures |w| ≤ 128
+// WARNING: Currently vector product has to fit in i16.
+// QB = 64 <=> |w| ≤ round(1.98 * QB) = 127 <=> QA * |w| < 32767 (i16 max)
 // changing it would put w above that bound and potentially break stuff
 const QB: i16 = 64;
 
 static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Hathy_I.bin")) };
-
-#[inline]
-/// Square Clipped ReLU - Activation Function.
-/// Note that this takes the i16s in the accumulator to i32s.
-/// Range is 0.0 .. 1.0 (in other words, 0 to QA*QA quantized).
-fn screlu(x: i16) -> i32 {
-    let y = i32::from(x).clamp(0, i32::from(QA));
-    y * y
-}
 
 /// This is the quantised format that bullet outputs.
 #[repr(C)]
