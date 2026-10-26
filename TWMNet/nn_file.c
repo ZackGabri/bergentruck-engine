@@ -7,6 +7,10 @@
 // Highkey, these helper functions were AI generated because I just do not care enough right now
 // I'll come back and fix up a lot of the code once I know everything works as intended ><".
 
+// Sanity limits so a corrupt file can't trigger a gigantic allocation. Adjust to taste.
+#define TWM_MAX_LAYERS 1024ULL
+#define TWM_MAX_NEURONS (1ULL << 20)
+
 char SaveDoubleArray(FILE *f, double *arr, unsigned long long size)
 {
 	if (size == 0)
@@ -60,7 +64,7 @@ char TWMNetworkRNNExportNetwork(PTWM_RNN_NETWORK pNetwork, char *pFilePath)
 	{
 		PTWM_RNN_LAYER pLayer = pNetwork->pLayers[i];
 		if (!pLayer)
-			return 1;
+			goto Error;
 
 		if (fwrite(&pLayer->NeuronMinimumWeight, sizeof(double), 1, File) != 1)
 			goto Error;
@@ -96,77 +100,87 @@ Error:
 	return 1;
 }
 
+// Frees a layer created by TWMNetworkRNNCreateLayer (or by import).
+static void FreeLayer(PTWM_RNN_LAYER pLayer)
+{
+	if (!pLayer)
+		return;
+
+	unsigned long long N = pLayer->CurrentNeuronCount;
+
+	FreeDouble2DArray(pLayer->pNeuronWeights, N);
+	FreeDouble2DArray(pLayer->pNeuronRecurrentWeights, N);
+	FreeDouble2DArray(pLayer->pNeuronWeightGradients, N);
+	FreeDouble2DArray(pLayer->pNeuronRecurrentWeightGradients, N);
+
+	free(pLayer->pNeuronBiases);
+	free(pLayer->pNeuronBiasGradients);
+	free(pLayer->pNeuronErrors);
+	free(pLayer->pNeuronOutputGradients);
+	free(pLayer->pNeuronValues);
+
+	// Hidden states are only allocated while running; normally NULL here.
+	if (pLayer->pNeuronHiddenStates)
+	{
+		// Time step count isn't stored on the layer, so this path should be
+		// handled by TWMNetworkRNNResetNetwork before freeing a live network.
+		free(pLayer->pNeuronHiddenStates);
+	}
+
+	free(pLayer);
+}
+
 PTWM_RNN_NETWORK TWMNetworkRNNImportNetwork(char *pFilePath)
 {
 	PTWM_RNN_NETWORK pNetwork = 0;
 	PTWM_RNN_LAYER *pLayers = 0;
-
 	unsigned long long LayerCount = 0;
+	unsigned long long LoadedLayers = 0;
 
 	FILE *File = fopen(pFilePath, "rb");
 	if (!File)
-	{
 		goto Error;
-	}
 
 	if (fread(&LayerCount, sizeof(unsigned long long), 1, File) != 1)
+		goto Error;
+	if (LayerCount == 0 || LayerCount > TWM_MAX_LAYERS)
 		goto Error;
 
 	pLayers = malloc(LayerCount * sizeof(PTWM_RNN_LAYER));
 	if (!pLayers)
-	{
 		goto Error;
-	}
 	memset(pLayers, 0, LayerCount * sizeof(PTWM_RNN_LAYER));
 
 	for (unsigned long long i = 0; i < LayerCount; i++)
 	{
-		pLayers[i] = malloc(sizeof(TWM_RNN_LAYER)); // fix 1
+		double MinWeight = 0, MaxWeight = 0, LearningRate = 0;
+		unsigned long long N = 0, P = 0;
+
+		// Same order the export writes them in.
+		if (fread(&MinWeight, sizeof(double), 1, File) != 1)
+			goto Error;
+		if (fread(&MaxWeight, sizeof(double), 1, File) != 1)
+			goto Error;
+		if (fread(&N, sizeof(unsigned long long), 1, File) != 1)
+			goto Error;
+		if (fread(&P, sizeof(unsigned long long), 1, File) != 1)
+			goto Error;
+		if (fread(&LearningRate, sizeof(double), 1, File) != 1)
+			goto Error;
+
+		if (N == 0 || P == 0 || N > TWM_MAX_NEURONS || P > TWM_MAX_NEURONS)
+			goto Error;
+
+		// Each layer's input size must match the previous layer's output size.
+		if (i > 0 && pLayers[i - 1]->CurrentNeuronCount != P)
+			goto Error;
+
+		// Allocates every buffer (values, errors, gradients, weights, ...).
+		// The random weights it generates get overwritten below.
+		pLayers[i] = TWMNetworkRNNCreateLayer(N, P, MinWeight, MaxWeight, LearningRate);
 		if (!pLayers[i])
-		{
 			goto Error;
-		}
-		memset(pLayers[i], 0, sizeof(TWM_RNN_LAYER)); // fix 1
-
-		if (fread(&pLayers[i]->NeuronMinimumWeight, sizeof(double), 1, File) != 1)
-			goto Error;
-		if (fread(&pLayers[i]->NeuronMaximumWeight, sizeof(double), 1, File) != 1)
-			goto Error;
-		if (fread(&pLayers[i]->CurrentNeuronCount, sizeof(unsigned long long), 1, File) != 1)
-			goto Error;
-		if (fread(&pLayers[i]->PreviousNeuronCount, sizeof(unsigned long long), 1, File) != 1)
-			goto Error;
-		if (fread(&pLayers[i]->LayerLearningRate, sizeof(double), 1, File) != 1)
-			goto Error;
-
-		unsigned long long N = pLayers[i]->CurrentNeuronCount;
-		unsigned long long P = pLayers[i]->PreviousNeuronCount;
-
-		// ---- fix 2: allocate the arrays before loading into them ----
-		pLayers[i]->pNeuronBiases = malloc(N * sizeof(double));
-		pLayers[i]->pNeuronWeights = malloc(N * sizeof(double *));
-		pLayers[i]->pNeuronRecurrentWeights = malloc(N * sizeof(double *));
-		if (!pLayers[i]->pNeuronBiases ||
-			!pLayers[i]->pNeuronWeights ||
-			!pLayers[i]->pNeuronRecurrentWeights)
-		{
-			goto Error;
-		}
-
-		// zero the row pointers so the Error cleanup can safely free partial results
-		memset(pLayers[i]->pNeuronWeights, 0, N * sizeof(double *));
-		memset(pLayers[i]->pNeuronRecurrentWeights, 0, N * sizeof(double *));
-
-		for (unsigned long long j = 0; j < N; j++)
-		{
-			pLayers[i]->pNeuronWeights[j] = malloc(P * sizeof(double));
-			pLayers[i]->pNeuronRecurrentWeights[j] = malloc(P * sizeof(double));
-			if (!pLayers[i]->pNeuronWeights[j] || !pLayers[i]->pNeuronRecurrentWeights[j])
-			{
-				goto Error;
-			}
-		}
-		// -------------------------------------------------------------
+		LoadedLayers = i + 1;
 
 		if (!LoadDoubleArray(File, pLayers[i]->pNeuronBiases, N))
 			goto Error;
@@ -178,9 +192,7 @@ PTWM_RNN_NETWORK TWMNetworkRNNImportNetwork(char *pFilePath)
 
 	pNetwork = malloc(sizeof(TWM_RNN_NETWORK));
 	if (!pNetwork)
-	{
 		goto Error;
-	}
 	memset(pNetwork, 0, sizeof(TWM_RNN_NETWORK));
 
 	pNetwork->LayerCount = LayerCount;
@@ -192,32 +204,14 @@ PTWM_RNN_NETWORK TWMNetworkRNNImportNetwork(char *pFilePath)
 Error:
 	printf("wtf happened?\n");
 	if (File)
-	{
 		fclose(File);
-	}
 
-	if (!pNetwork)
+	if (pLayers)
 	{
-		return 0;
+		for (unsigned long long i = 0; i < LoadedLayers; i++)
+			FreeLayer(pLayers[i]);
+		free(pLayers);
 	}
 
-	for (unsigned long long i = 0; i < pNetwork->LayerCount; i++)
-	{
-		if (!pNetwork->pLayers[i])
-		{
-			continue;
-		}
-
-		for (unsigned long long j = 0; j < pNetwork->pLayers[i]->CurrentNeuronCount; j++)
-		{
-			free(pNetwork->pLayers[i]->pNeuronWeights[i]);
-			free(pNetwork->pLayers[i]->pNeuronRecurrentWeights[i]);
-		}
-
-		free(pNetwork->pLayers[i]->pNeuronBiases);
-		free(pNetwork->pLayers[i]);
-	}
-
-	free(pNetwork);
 	return 0;
 }
