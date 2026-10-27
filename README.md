@@ -29,7 +29,7 @@ Burgentruck uses [shakmaty crate](https://crates.io/crates/Shakmaty) for board r
 - Time management: Hard and soft time management
 
 ### Evaluation
-Currently using NNUE with a (768 -> 128)x2 -> 1 net trained on 1 million self-play games, played at 5000 soft nodes.
+Currently using NNUE with a (768 -> 256)x2 -> 1 net trained on 2.5 million self-play games, played at 5000 soft nodes.
 Trainer used and inference code adapted from: [Bullet](https://github.com/jw1912/bullet)
 Legacy HCE evaluation code remains in the codebase.
 Possibly other NN architectures / ML techniques in the future...
