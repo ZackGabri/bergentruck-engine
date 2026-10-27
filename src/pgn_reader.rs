@@ -8,15 +8,13 @@ use std::path::Path;
 use pgn_reader::{RawComment, RawTag, Reader, SanPlus, Skip, Visitor};
 use shakmaty::{CastlingMode, Chess, Color, Move, Position, fen::Fen};
 
-use crate::search::{MATE_SCORE, MATE_THRESHOLD};
+use crate::search::MATE_SCORE;
 
-/*
-*
-* 12am and i spent too long making this instead of the actual trainer
-* It's made with being able to convert into viriformat/binpack with ease in mind
-* But i haven't yet done those, so i will come back to it later as well as adding readers
-*
-*/
+pub mod cli;
+pub mod viriformat;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameResult {
@@ -68,6 +66,17 @@ pub struct GameRecord {
 
     pub result: GameResult,
     pub moves: Vec<RecordedMove>,
+}
+
+impl GameRecord {
+    pub fn replay(&self) -> impl Iterator<Item = (Chess, &RecordedMove)> + '_ {
+        let mut pos = self.start.clone();
+        self.moves.iter().map(move |rm| {
+            let before = pos.clone();
+            pos.play_unchecked(rm.mv);
+            (before, rm)
+        })
+    }
 }
 
 // parses engine comments like `+11.41/9 0.009s, n=6911` or `-M2/12 0.005s`.
