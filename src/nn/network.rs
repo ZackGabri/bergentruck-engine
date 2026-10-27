@@ -1,8 +1,14 @@
 use shakmaty::{Chess, Color, File, Move, Piece, Position, Role, Square};
 
+#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+use std::arch::x86_64::*;
+
 const HIDDEN_SIZE: usize = 256;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
+
+// WARNING: QB = 64 ensures |w| ≤ 128
+// changing it would put w above that bound and potentially break stuff
 const QB: i16 = 64;
 
 static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Hathy_II.bin")) };
@@ -34,26 +40,90 @@ pub struct Network {
     output_bias: i16,
 }
 
+/// Horizontal sum of the eight i32 lanes.
+#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[inline]
+fn hsum_epi32(v: __m256i) -> i32 {
+    unsafe {
+        let lo = _mm256_castsi256_si128(v);
+        let hi = _mm256_extracti128_si256::<1>(v);
+        let s = _mm_add_epi32(lo, hi); // 8 -> 4 lanes
+        let s = _mm_add_epi32(s, _mm_shuffle_epi32::<0b01_00_11_10>(s)); // 4 -> 2
+        let s = _mm_add_epi32(s, _mm_shuffle_epi32::<0b10_11_00_01>(s)); // 2 -> 1
+        _mm_cvtsi128_si32(s)
+    }
+}
+
 impl Network {
-    /// Calculates the output of the network, starting from the already
-    /// calculated hidden layer (done efficiently during makemoves).
+    /// Dot product of SCReLU(acc) with the output weights, for both perspectives.
+    /// Returns the raw sum, quantised at QA * QA * QB, before the final rescaling.
+    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[inline]
+    fn dot(&self, us: &Accumulator, them: &Accumulator) -> i32 {
+        const CHUNKS: usize = HIDDEN_SIZE / 16; // 16 x i16 per 256-bit register
+
+        unsafe {
+            let zero = _mm256_setzero_si256();
+            let qa = _mm256_set1_epi16(QA);
+            let mut sum = zero;
+
+            for (acc, w) in [
+                (us, &self.output_weights[..HIDDEN_SIZE]),
+                (them, &self.output_weights[HIDDEN_SIZE..]),
+            ] {
+                let a = acc.vals.as_ptr() as *const __m256i;
+                let w = w.as_ptr() as *const __m256i;
+
+                for i in 0..CHUNKS {
+                    // Accumulator is align(64), so aligned loads are fine.
+                    let x = _mm256_load_si256(a.add(i));
+                    let wt = _mm256_loadu_si256(w.add(i));
+
+                    // Clipped ReLU: clamp to [0, QA]
+                    let v = _mm256_min_epi16(_mm256_max_epi16(x, zero), qa);
+
+                    // (v * w) stays in i16, requires |w| <= 128
+                    let vw = _mm256_mullo_epi16(v, wt);
+
+                    // (v * w) * v, with adjacent i16 pairs summed into i32 lanes
+                    sum = _mm256_add_epi32(sum, _mm256_madd_epi16(vw, v));
+                }
+            }
+            hsum_epi32(sum)
+        }
+    }
+
+    // Scalar fallback for non-AVX2 builds.
+    #[cfg(not(all(target_arch = "x86_64", target_feature = "avx2")))]
+    #[inline]
+    fn dot(&self, us: &Accumulator, them: &Accumulator) -> i32 {
+        #[inline]
+        /// Square Clipped ReLU - Activation Function.
+        /// Note that this takes the i16s in the accumulator to i32s.
+        /// Range is 0.0 .. 1.0 (in other words, 0 to QA*QA quantized).
+        fn screlu(x: i16) -> i32 {
+            let y = i32::from(x).clamp(0, i32::from(QA));
+            y * y
+        }
+
+        let mut out = 0;
+        for (acc, w) in [
+            (us, &self.output_weights[..HIDDEN_SIZE]),
+            (them, &self.output_weights[HIDDEN_SIZE..]),
+        ] {
+            for (&x, &w) in acc.vals.iter().zip(w) {
+                out += screlu(x) * i32::from(w);
+            }
+        }
+        out
+    }
+
     pub fn evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
-        let mut output = 0;
-
-        // Feed forward for both Side-To-Move and Not-Side-To-Move accumulators respectively
-        for (&input, &weight) in us.vals.iter().zip(&self.output_weights[..HIDDEN_SIZE]) {
-            output += screlu(input) * i32::from(weight);
-        }
-        for (&input, &weight) in them.vals.iter().zip(&self.output_weights[HIDDEN_SIZE..]) {
-            output += screlu(input) * i32::from(weight);
-        }
-
-        output /= i32::from(QA); // Reduce quantization from QA * QA * QB to QA * QB.
-        output += i32::from(self.output_bias); // Add bias.
-        output *= SCALE; // Apply eval scale.
-        output /= i32::from(QA) * i32::from(QB); // Remove quantisation altogether.
-
-        output
+        let mut output = self.dot(us, them);
+        output /= i32::from(QA);
+        output += i32::from(self.output_bias);
+        output *= SCALE;
+        output / (i32::from(QA) * i32::from(QB))
     }
 }
 
