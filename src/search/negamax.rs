@@ -27,7 +27,12 @@ impl std::fmt::Display for PVariation {
 
         for i in 0..self.length {
             if let Some(m) = self.line[i] {
-                output += &m.to_uci(shakmaty::CastlingMode::Standard).to_string();
+                let mode = if crate::engine_options().get_bool("UCI_Chess960") {
+                    shakmaty::CastlingMode::Standard
+                } else {
+                    shakmaty::CastlingMode::Chess960
+                };
+                output += &m.to_uci(mode).to_string();
 
                 // add spaces between unless it's last move
                 if i != self.length - 1 {

@@ -125,7 +125,13 @@ fn main() -> Result<(), anyhow::Error> {
                         continue;
                     }
 
-                    pos = fen?.into_position(pos.castles().mode())?;
+                    let mode = if engine_options().get_bool("UCI_Chess960") {
+                        shakmaty::CastlingMode::Chess960
+                    } else {
+                        shakmaty::CastlingMode::Standard
+                    };
+
+                    pos = fen?.into_position(mode)?;
                     history.push_position(&pos);
 
                     for m in moves {
