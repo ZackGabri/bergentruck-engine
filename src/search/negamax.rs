@@ -24,14 +24,14 @@ impl Default for PVariation {
 impl std::fmt::Display for PVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::new();
+        let mode = if crate::engine_options().get_bool("UCI_Chess960") {
+            shakmaty::CastlingMode::Chess960
+        } else {
+            shakmaty::CastlingMode::Standard
+        };
 
         for i in 0..self.length {
             if let Some(m) = self.line[i] {
-                let mode = if crate::engine_options().get_bool("UCI_Chess960") {
-                    shakmaty::CastlingMode::Standard
-                } else {
-                    shakmaty::CastlingMode::Chess960
-                };
                 output += &m.to_uci(mode).to_string();
 
                 // add spaces between unless it's last move
