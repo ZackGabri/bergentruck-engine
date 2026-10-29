@@ -4,7 +4,7 @@ use crate::transposition_table::TTHash;
 
 const HISTORY_SIZE: usize = 2048;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct MoveHistory {
     pub history: [TTHash; HISTORY_SIZE],
     pub index: usize,

@@ -10,6 +10,7 @@ use crate::history::MoveHistory;
 use crate::nn::data;
 use crate::options::EngineOptions;
 use crate::search::SearchOptions;
+use crate::search::threads::SearchThread;
 
 mod bench;
 mod history;
@@ -30,6 +31,8 @@ fn main() -> Result<(), anyhow::Error> {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut history = MoveHistory::new();
+
+    let mut search_thread: Option<SearchThread> = None;
 
     // Flatten all arguments, including space-separated string arguments
     let args: Vec<String> = std::env::args()
@@ -55,11 +58,20 @@ fn main() -> Result<(), anyhow::Error> {
 
     loop {
         let mut line = String::new();
-        stdin.read_line(&mut line).unwrap();
+        if stdin.read_line(&mut line)? == 0 {
+            break;
+        }
 
         let start_time = minstant::Instant::now();
 
         let tokens = line.split_ascii_whitespace().collect::<Vec<_>>();
+
+        if let Some(&cmd) = tokens.first()
+            && !matches!(cmd, "stop" | "quit")
+            && search_thread.as_ref().is_some_and(SearchThread::is_running)
+        {
+            continue; // basically ignoring anything that's not listed above
+        }
 
         match tokens.as_slice() {
             ["uci", ..] => {
@@ -145,6 +157,14 @@ fn main() -> Result<(), anyhow::Error> {
                 _ => {}
             },
 
+            ["go", "infinite", ..] => {
+                let search_options = SearchOptions {
+                    infinite: true,
+                    ..Default::default()
+                };
+
+                search_thread = Some(SearchThread::spawn(&pos, &history, search_options)?);
+            }
             ["go", "movetime", val] => {
                 // Fixed time per move, set both hard and soft deadlines to the same value
                 let search_options = SearchOptions {
@@ -158,11 +178,8 @@ fn main() -> Result<(), anyhow::Error> {
                         .ok(),
                     ..Default::default()
                 };
-                let (m, _, _) = search::search(&pos, Some(&mut history), search_options);
 
-                if let Some(best_move) = m {
-                    println!("bestmove {}", best_move.to_uci(pos.castles().mode()));
-                }
+                search_thread = Some(SearchThread::spawn(&pos, &history, search_options)?);
             }
             ["go", args @ ..] => {
                 let search_args = args.chunks(2);
@@ -201,13 +218,9 @@ fn main() -> Result<(), anyhow::Error> {
                     ..Default::default()
                 };
 
-                let (m, _, _) = search::search(&pos, Some(&mut history), search_options);
-
-                if let Some(best_move) = m {
-                    println!("bestmove {}", best_move.to_uci(pos.castles().mode()));
-                }
+                search_thread = Some(SearchThread::spawn(&pos, &history, search_options)?);
             }
-            ["stop", ..] => {}
+            ["stop", ..] => search::threads::stop_search(&mut search_thread),
 
             ["d" | "display", ..] => {
                 let mut board: [[char; 8]; 8] = [['.'; 8]; 8];
@@ -257,5 +270,6 @@ fn main() -> Result<(), anyhow::Error> {
         stdout.flush()?;
     }
 
+    search::threads::stop_search(&mut search_thread);
     Ok(())
 }

@@ -2,14 +2,15 @@ use crate::{history::MoveHistory, search::negamax::PVariation, transposition_tab
 use negamax::Negamax;
 
 use shakmaty::{Chess, Color, Move, Position};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
-
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod eval;
 pub mod genfens;
 pub mod negamax;
 pub mod see;
+pub mod threads;
 
 #[cfg(test)]
 mod tests;
@@ -67,6 +68,8 @@ pub struct SearchOptions {
     pub soft_deadline: Option<minstant::Instant>,
     pub bench: bool,
     pub aspiration_window: Option<i32>,
+    pub infinite: bool,
+    pub stop: Arc<AtomicBool>,
 }
 
 pub fn search(
@@ -82,14 +85,17 @@ pub fn search(
         soft_deadline,
         bench,
         aspiration_window,
+        infinite,
+        stop,
     } = search_options;
 
     let mut negamax = Negamax::new();
     negamax.max_hard_nodes = max_hard_nodes;
     negamax.hard_deadline = hard_deadline;
+    negamax.stop = stop;
 
     let max_depth = max_depth.unwrap_or_else(|| {
-        if max_hard_nodes.is_some() || hard_deadline.is_some() {
+        if infinite || max_hard_nodes.is_some() || hard_deadline.is_some() {
             100
         } else {
             crate::engine_options().get_number("Default Depth")
