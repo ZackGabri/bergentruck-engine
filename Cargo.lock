@@ -21,6 +21,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "bergentruck-engine"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "minstant",
+ "rand",
+ "shakmaty",
+ "shakmaty-syzygy",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -40,17 +51,6 @@ name = "bumpalo"
 version = "3.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dd9dc738b7a8311c7ade152424974d8115f2cdad61e8dab8dac9f2362298510"
-
-[[package]]
-name = "burgentruck-engine"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "minstant",
- "rand",
- "shakmaty",
- "shakmaty-syzygy",
-]
 
 [[package]]
 name = "byteorder"

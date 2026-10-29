@@ -165,10 +165,6 @@ pub fn search(
                 iter_pv.length = 1;
                 pv = iter_pv;
 
-                if !bench {
-                    let duration = start.elapsed();
-                    print_info(depth, score, duration, &negamax, &pv);
-                }
                 beta = std::cmp::min(MATE_SCORE, beta + delta);
                 delta += delta / 2;
                 FAIL_HIGHS.fetch_add(1, Ordering::Relaxed);
