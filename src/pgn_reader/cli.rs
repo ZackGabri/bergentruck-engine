@@ -97,8 +97,8 @@ fn pack(input: &Path, output: &Path) -> anyhow::Result<()> {
     let mut written_total = 0usize;
     let mut positions_total = 0usize; // every move written is one position
     let mut positions_scored = 0usize; // positions that actually have an eval
-    let mut games_empty = 0usize;
     let mut files_failed = 0usize;
+    let mut skipped_games = 0usize;
 
     for (i, file) in files.iter().enumerate() {
         let file_start = Instant::now();
@@ -121,11 +121,14 @@ fn pack(input: &Path, output: &Path) -> anyhow::Result<()> {
         let mut written = 0usize;
         let mut positions = 0usize;
         for game in &games {
-            if game.moves.is_empty() {
-                games_empty += 1;
+            if game.moves.is_empty() || game.moves.iter().any(|rm| rm.score.is_none()) {
+                skipped_games += 1;
                 continue;
             }
-            write_game(&mut writer, game)?;
+            if write_game(&mut writer, game).is_err() {
+                skipped_games += 1;
+                continue;
+            }
             written += 1;
             positions += game.moves.len();
             positions_scored += game.moves.iter().filter(|m| m.score.is_some()).count();
@@ -150,9 +153,10 @@ fn pack(input: &Path, output: &Path) -> anyhow::Result<()> {
 
     let elapsed = start.elapsed();
     println!(
-        "wrote {written_total} games, {positions_total} positions ({positions_scored} scored) to {} ({games_empty} empty games skipped, {files_failed} files failed)",
+        "wrote {written_total} games, {positions_total} positions ({positions_scored} scored) to {}",
         output.display()
     );
+    println!("{skipped_games} games skipped, {files_failed} files failed");
     println!(
         "total {:.2?} | {:.0} games/s, {:.0} positions/s",
         elapsed,
