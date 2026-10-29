@@ -1,4 +1,5 @@
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use shakmaty::{Chess, Move, MoveList, Position};
 
@@ -24,10 +25,15 @@ impl Default for PVariation {
 impl std::fmt::Display for PVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::new();
+        let mode = if crate::engine_options().get_bool("UCI_Chess960") {
+            shakmaty::CastlingMode::Chess960
+        } else {
+            shakmaty::CastlingMode::Standard
+        };
 
         for i in 0..self.length {
             if let Some(m) = self.line[i] {
-                output += &m.to_uci(shakmaty::CastlingMode::Standard).to_string();
+                output += &m.to_uci(mode).to_string();
 
                 // add spaces between unless it's last move
                 if i != self.length - 1 {
@@ -106,6 +112,7 @@ pub struct Negamax {
     accumulators: [[network::Accumulator; 2]; MAX_PLY],
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
+    pub stop: Arc<AtomicBool>,
     pub seldepth: usize,
 }
 
@@ -119,11 +126,8 @@ impl Negamax {
             accumulators: [[network::Accumulator::default(); 2]; MAX_PLY],
             max_hard_nodes: None,
             hard_deadline: None,
+            stop: Arc::default(),
             seldepth: 0,
-            // fp_depth: engine_options().get_number("FutilityDepth"),
-            // fp_multiplier: engine_options().get_number("FutilityMarginPerDepth"),
-            // fp_base: engine_options().get_number("FutilityMarginBase"),
-            // fp_moves: engine_options().get_number("FutilityMoves"),
         }
     }
 
@@ -493,6 +497,10 @@ impl Negamax {
     }
 
     pub fn has_reached_limit(&self) -> bool {
+        if self.stop.load(Ordering::Relaxed) {
+            return true;
+        }
+
         // Check node limit
         if let Some(hard_nodes) = self.max_hard_nodes
             && self.node_count >= hard_nodes

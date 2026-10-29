@@ -1,5 +1,5 @@
-EXE = Burgentruck
-LXE = burgentruck
+EXE = Bergentruck
+LXE = bergentruck
 VERSION = ???
 TMPDIR := $(CURDIR)/tmp
 
