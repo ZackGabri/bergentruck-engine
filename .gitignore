@@ -1,6 +1,8 @@
 *.pdb
 *.exe
 *.pgn
+*.vf
+*.binpack
 profile.json.gz
 flamegraph.svg
 /target

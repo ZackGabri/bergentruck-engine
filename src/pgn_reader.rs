@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::error::Error;
 use std::fs::File;
 use std::ops::ControlFlow;
@@ -10,7 +8,10 @@ use shakmaty::{CastlingMode, Chess, Color, Move, Position, fen::Fen};
 
 use crate::search::MATE_SCORE;
 
+mod output;
+
 pub mod cli;
+pub mod sfbinpack;
 pub mod viriformat;
 
 #[cfg(test)]

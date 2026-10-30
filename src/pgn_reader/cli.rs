@@ -1,17 +1,17 @@
-use std::fs::File;
-use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::read_pgn;
-use super::viriformat::write_game;
 
-const USAGE: &str = "usage: packpgns --input <file.pgn | directory> [--output <file.vf>]";
-const DEFAULT_OUTPUT: &str = "games.vf";
+const USAGE: &str = "usage: packpgns --input <file.pgn | directory> [--output <file.vf>] [--format <viriformat/sfbinpack>]";
+const DEFAULT_OUTPUT: &str = "games";
+
+use super::output::{OutputFormat, OutputWriter};
 
 pub fn pack_files(args: &[&str]) {
     let mut input_path: Option<&Path> = None;
     let mut output_path: Option<&Path> = None;
+    let mut output_format = OutputFormat::Viriformat;
 
     let split_args = args.chunks(2);
     for cli_argument in split_args {
@@ -22,13 +22,19 @@ pub fn pack_files(args: &[&str]) {
             ["--output" | "-o", output, ..] => {
                 output_path = Some(Path::new(output));
             }
-            // add option for viri/binpack later on, rn there's only viri
-            ["--format" | "-f", format, ..] => {}
+            ["--format" | "-f", format, ..] => {
+                output_format = match *format {
+                    "viriformat" | "viri" | "vf" => OutputFormat::Viriformat,
+                    "sfbinpack" | "binpack" | "sfbp" => OutputFormat::Sfbinpack,
+                    _ => {
+                        println!("unrecognized packing format");
+                        return;
+                    }
+                }
+            }
             other => {
-                eprintln!(
-                    "ignoring unrecognised or incomplete argument: {}",
-                    other.join(" ")
-                );
+                eprintln!("unrecognised or incomplete argument: {}", other.join(" "));
+                return;
             }
         }
     }
@@ -50,8 +56,9 @@ pub fn pack_files(args: &[&str]) {
 
     println!("input file/directory: {}", input.display());
     println!("output file: {}", output.display());
+    println!("format: {output_format:?}");
 
-    if let Err(e) = pack(input.as_path(), output.as_path()) {
+    if let Err(e) = pack(input.as_path(), output.as_path(), output_format) {
         eprintln!("error: {e:#}");
     }
 }
@@ -82,7 +89,7 @@ fn rate(count: usize, elapsed: Duration) -> f64 {
     if secs > 0.0 { count as f64 / secs } else { 0.0 }
 }
 
-fn pack(input: &Path, output: &Path) -> anyhow::Result<()> {
+fn pack(input: &Path, output: &Path, format: OutputFormat) -> anyhow::Result<()> {
     let files = collect_pgn_files(input)?;
     anyhow::ensure!(
         !files.is_empty(),
@@ -92,7 +99,7 @@ fn pack(input: &Path, output: &Path) -> anyhow::Result<()> {
 
     let start = Instant::now();
 
-    let mut writer = BufWriter::new(File::create(output)?);
+    let mut writer = OutputWriter::create(output, format)?;
 
     let mut written_total = 0usize;
     let mut positions_total = 0usize; // every move written is one position
@@ -125,7 +132,8 @@ fn pack(input: &Path, output: &Path) -> anyhow::Result<()> {
                 skipped_games += 1;
                 continue;
             }
-            if write_game(&mut writer, game).is_err() {
+            if let Err(e) = writer.write_game(game) {
+                eprintln!("failed to write game: {e:#}");
                 skipped_games += 1;
                 continue;
             }
@@ -149,7 +157,7 @@ fn pack(input: &Path, output: &Path) -> anyhow::Result<()> {
         );
     }
 
-    writer.flush()?;
+    writer.finish()?;
 
     let elapsed = start.elapsed();
     println!(
