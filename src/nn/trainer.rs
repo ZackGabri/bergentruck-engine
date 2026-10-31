@@ -7,6 +7,7 @@ use rand::seq::SliceRandom;
 
 use super::data::TrainingSample;
 use super::twm::TWMNet;
+use super::math::*;
 
 pub struct TrainingSteps {
     pub batch_size: usize,
@@ -73,6 +74,8 @@ impl Default for TrainerConfig {
 pub struct NetworkTrainer {
     pub config: TrainerConfig,
     net: TWMNet,
+    predictions: Vec<f64>,
+    targets: Vec<f64>,
 }
 
 impl NetworkTrainer {
@@ -80,6 +83,8 @@ impl NetworkTrainer {
         Self {
             config: TrainerConfig::default(),
             net: TWMNet::new(),
+            predictions: Vec::new(),
+            targets: Vec::new(),
         }
     }
 
@@ -103,12 +108,16 @@ impl NetworkTrainer {
 
         let training_steps = &self.config.training_steps;
 
+        // Superbatch loop
         for sb in training_steps.start_superbatch..=training_steps.end_superbatch {
             let lr = self.lr_at(sb);
             self.net.update_learning_rate(lr);
 
             let mut loss = 0.0; // how do i calculate this?
+            self.predictions.clear();
+            self.targets.clear();
 
+            // Batch loop
             let start = Instant::now();
             for i in 0..self.superbatch_size() {
                 if sample_index == data.len() {
@@ -119,8 +128,10 @@ impl NetworkTrainer {
                 let s = &data[sample_index];
                 sample_index += 1;
 
+                self.targets.push(s.target);
+
                 self.net.reset();
-                self.net.advance(s.features).expect("Advancing net failed");
+                self.predictions.push(self.net.advance(s.features).expect("Advancing net failed")[0]);
                 self.net.update([s.target]).expect("Updating net failed");
 
                 if self.config.log_every > 0 && (i + 1) % self.config.log_every == 0 {
@@ -132,6 +143,8 @@ impl NetworkTrainer {
                     );
                 }
             }
+
+            loss = get_rmse(&self.predictions, &self.targets);
 
             println!(
                 "superbatch {sb}/{} lr={lr:.6} loss={loss:.6} time={:.2?}",

@@ -56,6 +56,22 @@ fn main() -> Result<(), anyhow::Error> {
                 pgn_reader::cli::pack_files(args);
                 return Ok(());
             }
+            ["balls", ..] => {
+                use crate::nn::trainer::TrainingSteps;
+
+                let games = pgn_reader::read_pgn("./71.281.1.pgn")?;
+
+                let mut trainer = nn::trainer::NetworkTrainer::new();
+                trainer.config.training_steps = TrainingSteps {
+                    batch_size: 1,
+                    end_superbatch: 1,
+                    batches_per_superbatch: 6000,
+                    ..Default::default()
+                };
+                trainer.train(data::games_to_samples(games))?;
+
+                return Ok(());
+            }
             ["quit", ..] => return Ok(()),
             _ => {}
         };

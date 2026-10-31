@@ -3,6 +3,7 @@
 use shakmaty::{Chess, Color, Piece, Position, Role};
 
 use crate::pgn_reader::GameRecord;
+use super::math::*;
 
 #[derive(Clone, Debug)]
 pub struct TrainingSample {
@@ -39,14 +40,6 @@ pub fn parse_board_to_features(board: &Chess) -> [f64; 64] {
     features
 }
 
-pub fn win_probability(centipawns: f64) -> f64 {
-    1.0 / (1.0 + 10f64.powf(-centipawns / 400.0))
-}
-
-pub fn centipawns(probability: f64) -> f64 {
-    -400.0 * (1.0 / probability - 1.0).log10()
-}
-
 pub fn games_to_samples(games: Vec<GameRecord>) -> Vec<TrainingSample> {
     let mut samples = Vec::new();
 
@@ -57,7 +50,7 @@ pub fn games_to_samples(games: Vec<GameRecord>) -> Vec<TrainingSample> {
 
             samples.push(TrainingSample {
                 features: parse_board_to_features(&pos),
-                target: win_probability(score as f64),
+                target: get_target(0.75, 0.0, score as f64),
             });
         }
     }
