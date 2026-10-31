@@ -65,20 +65,34 @@ impl TWMNet {
         Ok(())
     }
 
-    pub fn advance(&mut self, inputs: NetworkInput) {
+    pub fn advance(&mut self, inputs: NetworkInput) -> anyhow::Result<NetworkOutput> {
         unsafe {
-            twm::TWMNetworkRNNAdvanceNetwork(
+            let out = twm::TWMNetworkRNNAdvanceNetwork(
                 self.network_ptr,
                 inputs.as_ptr() as *mut _,
                 INPUT_SIZE,
             );
+
+            if out.is_null() {
+                anyhow::bail!("Advance failed");
+            }
+
+            let mut result = [0.0; OUTPUT_SIZE as usize];
+            result.copy_from_slice(std::slice::from_raw_parts(out, OUTPUT_SIZE as usize));
+
+            Ok(result)
         }
     }
 
-    pub fn update(&mut self, expected_output: NetworkOutput) {
+    pub fn update(&mut self, expected_output: NetworkOutput) -> anyhow::Result<()> {
         unsafe {
-            twm::TWMNetworkRNNUpdateNetwork(self.network_ptr, expected_output.as_ptr() as *mut _);
+            if twm::TWMNetworkRNNUpdateNetwork(self.network_ptr, expected_output.as_ptr() as *mut _)
+                != 0
+            {
+                anyhow::bail!("Update failed");
+            }
         }
+        Ok(())
     }
 
     pub fn update_learning_rate(&mut self, rate: f64) {

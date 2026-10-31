@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 #include "nn.h"
 
 // This function will stop iterating over the variadic arguments when either
