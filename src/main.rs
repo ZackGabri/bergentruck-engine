@@ -70,6 +70,7 @@ fn main() -> Result<(), anyhow::Error> {
             && !matches!(cmd, "stop" | "quit")
             && search_thread.as_ref().is_some_and(SearchThread::is_running)
         {
+            println!("info depth 0 hashfull -1 time -1 pv e2e2 ignoring uci command {}", cmd);
             continue; // basically ignoring anything that's not listed above
         }
 

@@ -16,6 +16,7 @@ pub fn stop_search(search_thread: &mut Option<SearchThread>) {
 
 pub struct SearchThread {
     stop: Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
     handle: thread::JoinHandle<()>,
 }
 
@@ -30,7 +31,8 @@ impl SearchThread {
 
         let stop = Arc::clone(&options.stop);
         let thread_stop = Arc::clone(&stop);
-
+        let running = Arc::new(AtomicBool::new(true));
+        let thread_running = Arc::clone(&running);
         let infinite = options.infinite;
 
         let handle = thread::Builder::new()
@@ -40,17 +42,24 @@ impl SearchThread {
 
                 // `go infinite` shouldn't print a move until `stop` is recieved, even if the search finishes
                 if infinite {
-                    while !thread_stop.load(Ordering::Relaxed) {
+                    while !thread_stop.load(Ordering::Acquire) {
                         thread::park();
                     }
                 }
+
+                // clear BEFORE printing, so the GUI's next command is never dropped
+                thread_running.store(false, Ordering::Release);
 
                 if let Some(m) = best_move {
                     println!("bestmove {}", m.to_uci(position.castles().mode()));
                 }
             })?;
 
-        Ok(Self { stop, handle })
+        Ok(Self {
+            stop,
+            running,
+            handle,
+        })
     }
 
     pub fn stop_and_join(self) {
@@ -60,6 +69,6 @@ impl SearchThread {
     }
 
     pub fn is_running(&self) -> bool {
-        !self.handle.is_finished()
+        self.running.load(Ordering::Acquire)
     }
 }
