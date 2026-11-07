@@ -1,3 +1,6 @@
+use shakmaty::{Chess};
+use super::math::*;
+
 use std::ffi::CString;
 
 mod twm {
@@ -6,9 +9,7 @@ mod twm {
 }
 
 const INPUT_SIZE: u64 = 64;
-const LAYER1_SIZE: u64 = 1024;
-const LAYER2_SIZE: u64 = 256;
-const LAYER3_SIZE: u64 = 256;
+const LAYER1_SIZE: u64 = 128;
 const OUTPUT_SIZE: u64 = 1;
 
 pub type NetworkInput = [f64; INPUT_SIZE as usize];
@@ -22,16 +23,21 @@ impl TWMNet {
     pub fn new() -> Self {
         unsafe {
             let layer1 = twm::TWMNetworkRNNCreateLayer(LAYER1_SIZE, INPUT_SIZE, -1.0, 1.0, 0.01);
-            let layer2 = twm::TWMNetworkRNNCreateLayer(LAYER2_SIZE, LAYER1_SIZE, -1.0, 1.0, 0.01);
-            let layer3 = twm::TWMNetworkRNNCreateLayer(LAYER3_SIZE, LAYER2_SIZE, -1.0, 1.0, 0.01);
-            let layer4 = twm::TWMNetworkRNNCreateLayer(OUTPUT_SIZE, LAYER3_SIZE, -1.0, 1.0, 0.01);
+            let layer2 = twm::TWMNetworkRNNCreateLayer(OUTPUT_SIZE, LAYER1_SIZE, -1.0, 1.0, 0.01);
 
-            let network = twm::TWMNetworkRNNCreateNetwork(4, layer1, layer2, layer3, layer4);
+            let network = twm::TWMNetworkRNNCreateNetwork(2, layer1, layer2);
 
             Self {
                 network_ptr: network,
             }
         }
+    }
+
+    pub fn evaluate_twm_net(&mut self, position: &Chess) -> i32 {
+        let features = crate::nn::data::parse_board_to_features(position);
+        let output = self.advance(features).expect("inference failed");
+        println!("twm_net output: {:?}", output);
+        get_centipawns(output[0]) as i32
     }
 
     pub fn import(path: &str) -> anyhow::Result<Self> {

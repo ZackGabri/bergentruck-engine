@@ -6,3 +6,5 @@
 profile.json.gz
 flamegraph.svg
 /target
+twm_data/
+checkpoints/
