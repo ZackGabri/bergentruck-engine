@@ -1,4 +1,4 @@
-use shakmaty::{Chess};
+use shakmaty::{Chess, Position};
 use super::math::*;
 
 use std::ffi::CString;
@@ -36,8 +36,12 @@ impl TWMNet {
     pub fn evaluate_twm_net(&mut self, position: &Chess) -> i32 {
         let features = crate::nn::data::parse_board_to_features(position);
         let output = self.advance(features).expect("inference failed");
-        println!("twm_net output: {:?}", output);
-        get_centipawns(output[0]) as i32
+        let centipawns = get_centipawns(output[0]) as i32;
+        if position.turn() == shakmaty::Color::White {
+            centipawns
+        } else {
+            -centipawns
+        }
     }
 
     pub fn import(path: &str) -> anyhow::Result<Self> {

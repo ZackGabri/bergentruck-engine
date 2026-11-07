@@ -67,7 +67,7 @@ fn main() -> Result<(), anyhow::Error> {
                 trainer.config.training_steps = TrainingSteps {
                     batch_size: 512,
                     end_superbatch: 50,
-                    batches_per_superbatch: 256,
+                    batches_per_superbatch: 128,
                     ..Default::default()
                 };
                 trainer.train(data::games_to_samples(games))?;
@@ -290,6 +290,7 @@ fn main() -> Result<(), anyhow::Error> {
                             println!("Successfully loaded: {}", path);
                             let eval = twm_net.evaluate_twm_net(&pos);
                             println!("--> Eval for {}: {}", path, eval);
+                            twm_net.reset();
                         }
                         Err(_e) => {
                             // eprintln!("Skipping {} (not found or invalid): {}", path, e);

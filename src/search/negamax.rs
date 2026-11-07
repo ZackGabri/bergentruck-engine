@@ -5,6 +5,7 @@ use shakmaty::{Chess, Move, MoveList, Position};
 
 use crate::history::MoveHistory;
 use crate::nn::network;
+use crate::nn::twm::TWMNet;
 use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
 
@@ -110,6 +111,7 @@ pub struct Negamax {
     history_table: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
     accumulators: [[network::Accumulator; 2]; MAX_PLY],
+    twm_net: TWMNet,
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
     pub stop: Arc<AtomicBool>,
@@ -124,6 +126,8 @@ impl Negamax {
             history_table: [[[0; 64]; 64]; 2],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
             accumulators: [[network::Accumulator::default(); 2]; MAX_PLY],
+            twm_net: TWMNet::import("checkpoints/test-50.net")
+                .expect("failed to load TWM checkpoint checkpoints/test-50.net"),
             max_hard_nodes: None,
             hard_deadline: None,
             stop: Arc::default(),
@@ -491,9 +495,13 @@ impl Negamax {
     }
 
     #[inline(always)]
-    fn static_eval(&mut self, position: &Chess, ply: usize) -> i32 {
+    fn static_eval(&mut self, position: &Chess, _ply: usize) -> i32 {
         // super::eval::evaluate(position)
-        network::evaluate(&self.accumulators[ply], position.turn())
+        // network::evaluate(&self.accumulators[ply], position.turn())
+        self.twm_net.reset();
+        let eval = self.twm_net.evaluate_twm_net(position);
+        self.twm_net.reset();
+        eval
     }
 
     pub fn has_reached_limit(&self) -> bool {

@@ -24,3 +24,19 @@ pub fn get_rmse(predictions: &[f64], targets: &[f64]) -> f64 {
     }
     (loss / batch_size as f64).sqrt()
 }
+
+// Binary cross-entropy loss
+pub fn get_bce_loss(predictions: &[f64], targets: &[f64]) -> f64 {
+    assert_eq!(predictions.len(), targets.len(), "Vectors must be of equal length");
+    let batch_size = predictions.len();
+    let eps = 1e-15; // Small epsilon to prevent log(0) NaN explosions
+
+    let mut total_loss = 0.0;
+    for i in 0..batch_size {
+        let p = predictions[i].clamp(eps, 1.0 - eps); // Clamp predictions away from exact 0.0 and 1.0
+        let t = targets[i];
+        
+        total_loss += - (t * p.ln() + (1.0 - t) * (1.0 - p).ln());
+    }
+    total_loss / batch_size as f64
+}

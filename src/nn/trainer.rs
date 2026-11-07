@@ -143,7 +143,9 @@ impl NetworkTrainer {
                     );
                 }
             }
-
+            
+            // println!("Predictions: {:?}", self.predictions);
+            // println!("Targets: {:?}", self.targets);
             loss = get_rmse(&self.predictions, &self.targets);
 
             println!(

@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use shakmaty::{Chess, Color, File, Move, Piece, Position, Role, Square};
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
