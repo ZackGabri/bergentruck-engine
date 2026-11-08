@@ -3,6 +3,7 @@
 use shakmaty::{Chess, Color, Piece, Position, Role};
 
 use crate::pgn_reader::GameRecord;
+use crate::pgn_reader::GameResult;
 use super::math::*;
 
 #[derive(Clone, Debug)]
@@ -44,13 +45,20 @@ pub fn games_to_samples(games: Vec<GameRecord>) -> Vec<TrainingSample> {
     let mut samples = Vec::new();
 
     for game in games {
+        let raw_result = game.result;
+
         for (pos, rm) in game.replay() {
-            // No score parsed for this move
             let Some(score) = rm.score else { continue };
+            
+            let result = match raw_result {
+                GameResult::Draw => 0.5,
+                GameResult::WhiteWin => (pos.turn() == Color::White) as u8 as f64,
+                GameResult::BlackWin => (pos.turn() == Color::Black) as u8 as f64,
+            };
 
             samples.push(TrainingSample {
                 features: parse_board_to_features(&pos),
-                target: get_target(0.0, 0.0, score as f64),
+                target: get_target(0.5, result, score as f64),
             });
         }
     }
