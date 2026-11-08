@@ -8,10 +8,10 @@ use shakmaty::{Chess, Position};
 
 use crate::history::MoveHistory;
 use crate::nn::data;
+use crate::nn::twm::TWMNet;
 use crate::options::EngineOptions;
 use crate::search::SearchOptions;
 use crate::search::threads::SearchThread;
-use crate::nn::twm::TWMNet;
 
 mod bench;
 mod history;
@@ -281,7 +281,7 @@ fn main() -> Result<(), anyhow::Error> {
             ["test", ..] => {
                 for i in 1..=50 {
                     let path = format!("checkpoints/test-{}.net", i);
-                    
+
                     match TWMNet::import(&path) {
                         Ok(mut twm_net) => {
                             println!("Successfully loaded: {}", path);

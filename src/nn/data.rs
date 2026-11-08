@@ -2,8 +2,8 @@
 
 use shakmaty::{Chess, Color, Piece, Position, Role};
 
-use crate::pgn_reader::GameRecord;
 use super::math::*;
+use crate::pgn_reader::GameRecord;
 
 #[derive(Clone, Debug)]
 pub struct TrainingSample {
