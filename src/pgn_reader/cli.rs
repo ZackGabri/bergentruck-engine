@@ -43,7 +43,7 @@ pub fn pack_files(args: &[&str]) -> anyhow::Result<()> {
 }
 
 // A single file, or every .pgn file directly inside a directory
-fn collect_pgn_files(input: &Path) -> anyhow::Result<Vec<PathBuf>> {
+pub fn collect_pgn_files(input: &Path) -> anyhow::Result<Vec<PathBuf>> {
     if input.is_file() {
         return Ok(vec![input.to_path_buf()]);
     }

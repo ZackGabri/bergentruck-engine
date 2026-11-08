@@ -11,6 +11,7 @@ use crate::nn::data;
 use crate::options::EngineOptions;
 use crate::search::SearchOptions;
 use crate::search::threads::SearchThread;
+use crate::nn::twm::TWMNet;
 
 mod bench;
 mod history;
@@ -55,14 +56,15 @@ fn main() -> Result<(), anyhow::Error> {
             ["packpgns", args @ ..] => return pgn_reader::cli::pack_files(args),
             ["balls", ..] => {
                 use crate::nn::trainer::TrainingSteps;
+                use std::path::Path;
 
-                let games = pgn_reader::read_pgn("./71.281.1.pgn")?;
+                let games = pgn_reader::read_pgns(Path::new("twm_data/"))?;
 
                 let mut trainer = nn::trainer::NetworkTrainer::new();
                 trainer.config.training_steps = TrainingSteps {
-                    batch_size: 1,
-                    end_superbatch: 1,
-                    batches_per_superbatch: 6000,
+                    batch_size: 512,
+                    end_superbatch: 50,
+                    batches_per_superbatch: 128,
                     ..Default::default()
                 };
                 trainer.train(data::games_to_samples(games))?;
@@ -277,7 +279,21 @@ fn main() -> Result<(), anyhow::Error> {
                 }
             }
             ["test", ..] => {
-                println!("Features: {:?}", data::parse_board_to_features(&pos));
+                for i in 1..=50 {
+                    let path = format!("checkpoints/test-{}.net", i);
+                    
+                    match TWMNet::import(&path) {
+                        Ok(mut twm_net) => {
+                            println!("Successfully loaded: {}", path);
+                            let eval = twm_net.evaluate_twm_net(&pos);
+                            println!("--> Eval for {}: {}", path, eval);
+                            twm_net.reset();
+                        }
+                        Err(_e) => {
+                            // eprintln!("Skipping {} (not found or invalid): {}", path, e);
+                        }
+                    }
+                }
             }
 
             [] => {}

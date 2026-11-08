@@ -50,7 +50,7 @@ pub fn games_to_samples(games: Vec<GameRecord>) -> Vec<TrainingSample> {
 
             samples.push(TrainingSample {
                 features: parse_board_to_features(&pos),
-                target: get_target(0.75, 0.0, score as f64),
+                target: get_target(0.0, 0.0, score as f64),
             });
         }
     }

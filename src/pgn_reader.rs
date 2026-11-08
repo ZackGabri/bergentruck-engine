@@ -218,3 +218,18 @@ pub fn read_pgn<P: AsRef<Path>>(path: P) -> anyhow::Result<Vec<GameRecord>> {
     }
     Ok(all)
 }
+
+/// Return a list of games from all pgn files in a given directory
+pub fn read_pgns<P: AsRef<Path>>(dir: P) -> anyhow::Result<Vec<GameRecord>> {
+    let files = cli::collect_pgn_files(dir.as_ref())?;
+    let mut all = Vec::new();
+
+    let mut count = 0;
+    for file in files {
+        all.extend(read_pgn(file)?);
+        count += 1;
+    }
+    println!("Read {} games from {} files", all.len(), count);
+
+    Ok(all)
+}
