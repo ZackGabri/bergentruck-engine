@@ -52,10 +52,7 @@ fn main() -> Result<(), anyhow::Error> {
                 search::genfens::generate_fens(n, seed, book_path, extra.as_deref())?;
                 return Ok(());
             }
-            ["packpgns", args @ ..] => {
-                pgn_reader::cli::pack_files(args);
-                return Ok(());
-            }
+            ["packpgns", args @ ..] => return pgn_reader::cli::pack_files(args),
             ["balls", ..] => {
                 use crate::nn::trainer::TrainingSteps;
 
