@@ -27,15 +27,35 @@ impl Default for TrainingSteps {
     }
 }
 
-pub struct LearningRate {
-    pub start: f64,
-    pub gamma: f64,
-    pub step: usize,
+pub enum LearningRate {
+    Step {
+        start: f64,
+        gamma: f64,
+        step: usize,
+    },
+    Linear {
+        start: f64,
+        end: f64,
+        total_steps: usize,
+    }
+}
+
+impl LearningRate {
+    pub fn lr_at(&self, sb: usize) -> f64 {
+        match self {
+            LearningRate::Step { start, gamma, step } => {
+                step_lr(*start, *gamma, *step, sb)
+            }
+            LearningRate::Linear { start, end, total_steps } => {
+                linear_lr(*start, *end, *total_steps, sb)
+            }
+        }
+    }
 }
 
 impl Default for LearningRate {
     fn default() -> Self {
-        Self {
+        LearningRate::Step {
             start: 0.001,
             gamma: 0.1,
             step: 18,
@@ -88,9 +108,9 @@ impl NetworkTrainer {
         }
     }
 
-    fn lr_at(&self, sb: usize) -> f64 {
+    fn get_lr(&self, sb: usize) -> f64 {
         let lr = &self.config.learning_rate;
-        lr.start * lr.gamma.powi((sb / lr.step) as i32)
+        lr.lr_at(sb)
     }
 
     fn superbatch_size(&self) -> usize {
@@ -110,7 +130,7 @@ impl NetworkTrainer {
 
         // Superbatch loop
         for sb in training_steps.start_superbatch..=training_steps.end_superbatch {
-            let lr = self.lr_at(sb);
+            let lr = self.get_lr(sb);
             self.net.update_learning_rate(lr);
 
             let mut loss = 0.0; // how do i calculate this?

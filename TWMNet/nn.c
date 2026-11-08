@@ -590,8 +590,7 @@ char TWMNetworkRNNBackpropagateHidden(PTWM_RNN_LAYER pLayer, PTWM_RNN_LAYER pPre
 			pLayer->pNeuronWeightGradients[i][j] = pLayer->pNeuronOutputGradients[i] * pPreviousLayer->pNeuronValues[j];
 			pLayer->pNeuronRecurrentWeightGradients[i][j] = pLayer->pNeuronOutputGradients[i] * pPreviousLayer->pNeuronHiddenStates[CurrentTimeStep][j];
 
-			// pLayer->pNeuronBiasGradients[i] = pLayer->pNeuronOutputGradients[i] * pPreviousLayer->pNeuronValues[j];
-			pLayer->pNeuronBiasGradients[i] = pLayer->pNeuronOutputGradients[i];
+			pLayer->pNeuronBiasGradients[i] = pLayer->pNeuronOutputGradients[i] * pPreviousLayer->pNeuronValues[j];
 		}
 	}
 
@@ -624,8 +623,7 @@ char TWMNetworkRNNBackpropagateOutput(PTWM_RNN_LAYER pLayer, PTWM_RNN_LAYER pPre
 			// See notes mentioned above
 			pLayer->pNeuronRecurrentWeightGradients[i][j] = pLayer->pNeuronOutputGradients[i] * pPreviousLayer->pNeuronHiddenStates[CurrentTimeStep][j];
 
-			// pLayer->pNeuronBiasGradients[i] = pLayer->pNeuronOutputGradients[i] * pPreviousLayer->pNeuronValues[j];
-			pLayer->pNeuronBiasGradients[i] = pLayer->pNeuronOutputGradients[i];
+			pLayer->pNeuronBiasGradients[i] = pLayer->pNeuronOutputGradients[i] * pPreviousLayer->pNeuronValues[j];
 		}
 	}
 

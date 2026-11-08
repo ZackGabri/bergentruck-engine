@@ -9,7 +9,7 @@ mod twm {
 }
 
 const INPUT_SIZE: u64 = 64;
-const LAYER1_SIZE: u64 = 128;
+const LAYER1_SIZE: u64 = 256;
 const OUTPUT_SIZE: u64 = 1;
 
 pub type NetworkInput = [f64; INPUT_SIZE as usize];

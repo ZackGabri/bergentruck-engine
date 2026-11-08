@@ -56,6 +56,7 @@ fn main() -> Result<(), anyhow::Error> {
             ["packpgns", args @ ..] => return pgn_reader::cli::pack_files(args),
             ["balls", ..] => {
                 use crate::nn::trainer::TrainingSteps;
+                use crate::nn::trainer::LearningRate;
                 use std::path::Path;
 
                 let games = pgn_reader::read_pgns(Path::new("twm_data/"))?;
@@ -67,6 +68,13 @@ fn main() -> Result<(), anyhow::Error> {
                     batches_per_superbatch: 128,
                     ..Default::default()
                 };
+
+                trainer.config.learning_rate = LearningRate::Linear {
+                    start: 0.05,      
+                    end: 0.0001,
+                    total_steps: 50,
+                };
+
                 trainer.train(data::games_to_samples(games))?;
 
                 return Ok(());
