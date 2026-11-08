@@ -6,8 +6,8 @@ use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 
 use super::data::TrainingSample;
-use super::twm::TWMNet;
 use super::math::*;
+use super::twm::TWMNet;
 
 pub struct TrainingSteps {
     pub batch_size: usize,
@@ -131,7 +131,8 @@ impl NetworkTrainer {
                 self.targets.push(s.target);
 
                 self.net.reset();
-                self.predictions.push(self.net.advance(s.features).expect("Advancing net failed")[0]);
+                self.predictions
+                    .push(self.net.advance(s.features).expect("Advancing net failed")[0]);
                 self.net.update([s.target]).expect("Updating net failed");
 
                 if self.config.log_every > 0 && (i + 1) % self.config.log_every == 0 {
@@ -143,7 +144,7 @@ impl NetworkTrainer {
                     );
                 }
             }
-            
+
             // println!("Predictions: {:?}", self.predictions);
             // println!("Targets: {:?}", self.targets);
             loss = get_rmse(&self.predictions, &self.targets);

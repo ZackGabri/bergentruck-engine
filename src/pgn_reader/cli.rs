@@ -1,66 +1,45 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use anyhow::Context;
+
 use super::read_pgn;
 
-const USAGE: &str = "usage: packpgns --input <file.pgn | directory> [--output <file.vf>] [--format <viriformat/sfbinpack>]";
+const USAGE: &str = "usage: packpgns --input <file.pgn | directory> [--output <file.vf>] [--format <viriformat/sfbinpack>] [--one-file <true/false>]";
 const DEFAULT_OUTPUT: &str = "games";
 
 use super::output::{OutputFormat, OutputWriter};
 
-pub fn pack_files(args: &[&str]) {
+pub fn pack_files(args: &[&str]) -> anyhow::Result<()> {
     let mut input_path: Option<&Path> = None;
     let mut output_path: Option<&Path> = None;
     let mut output_format = OutputFormat::Viriformat;
+    let mut as_one = true;
 
     let split_args = args.chunks(2);
     for cli_argument in split_args {
         match cli_argument {
-            ["--input" | "-i", input, ..] => {
-                input_path = Some(Path::new(input));
-            }
-            ["--output" | "-o", output, ..] => {
-                output_path = Some(Path::new(output));
-            }
-            ["--format" | "-f", format, ..] => {
-                output_format = match *format {
-                    "viriformat" | "viri" | "vf" => OutputFormat::Viriformat,
-                    "sfbinpack" | "binpack" | "sfbp" => OutputFormat::Sfbinpack,
-                    _ => {
-                        println!("unrecognized packing format");
-                        return;
-                    }
-                }
-            }
+            ["--input" | "-i", input, ..] => input_path = Some(Path::new(input)),
+            ["--output" | "-o", output, ..] => output_path = Some(Path::new(output)),
+            ["--format" | "-f", format, ..] => output_format = format.parse()?,
+            ["--as-one" | "--one-file", yesno] => as_one = yesno.parse()?,
             other => {
-                eprintln!("unrecognised or incomplete argument: {}", other.join(" "));
-                return;
+                anyhow::bail!("unrecognised or incomplete argument: {}", other.join(" "));
             }
         }
     }
 
-    let Some(input_path) = input_path else {
-        eprintln!("missing --input\n{USAGE}");
-        return;
-    };
+    let input_path = input_path.context(format!("missing --input\n{USAGE}"))?;
     let output_path = output_path.unwrap_or_else(|| Path::new(DEFAULT_OUTPUT));
 
-    let Ok(input) = std::path::absolute(input_path) else {
-        eprintln!("Invalid input path provided!");
-        return;
-    };
-    let Ok(output) = std::path::absolute(output_path) else {
-        eprintln!("Invalid output path provided!");
-        return;
-    };
+    let input = std::path::absolute(input_path).context("Invalid input path provided!")?;
+    let output = std::path::absolute(output_path).context("Invalid output path provided!")?;
 
     println!("input file/directory: {}", input.display());
     println!("output file: {}", output.display());
     println!("format: {output_format:?}");
 
-    if let Err(e) = pack(input.as_path(), output.as_path(), output_format) {
-        eprintln!("error: {e:#}");
-    }
+    pack(input.as_path(), output.as_path(), output_format, as_one)
 }
 
 // A single file, or every .pgn file directly inside a directory
@@ -89,7 +68,7 @@ fn rate(count: usize, elapsed: Duration) -> f64 {
     if secs > 0.0 { count as f64 / secs } else { 0.0 }
 }
 
-fn pack(input: &Path, output: &Path, format: OutputFormat) -> anyhow::Result<()> {
+fn pack(input: &Path, output: &Path, format: OutputFormat, as_one: bool) -> anyhow::Result<()> {
     let files = collect_pgn_files(input)?;
     anyhow::ensure!(
         !files.is_empty(),
@@ -99,7 +78,16 @@ fn pack(input: &Path, output: &Path, format: OutputFormat) -> anyhow::Result<()>
 
     let start = Instant::now();
 
-    let mut writer = OutputWriter::create(output, format)?;
+    let mut shared_writer = if as_one {
+        Some(OutputWriter::create(
+            &output.with_extension(format.extension()),
+            format,
+        )?)
+    } else {
+        std::fs::create_dir_all(output)
+            .context(format!("failed to create folder {}", output.display()))?;
+        None
+    };
 
     let mut written_total = 0usize;
     let mut positions_total = 0usize; // every move written is one position
@@ -109,6 +97,32 @@ fn pack(input: &Path, output: &Path, format: OutputFormat) -> anyhow::Result<()>
 
     for (i, file) in files.iter().enumerate() {
         let file_start = Instant::now();
+
+        let mut individual_writer = if as_one {
+            None
+        } else {
+            let file = file.with_extension(format.extension());
+            let output_path = output.join(file.file_name().unwrap());
+
+            match OutputWriter::create(&output_path, format) {
+                Ok(writer) => Some(writer),
+                Err(e) => {
+                    eprintln!(
+                        "[{}/{}] {}: failed to create output: {e:#}",
+                        i + 1,
+                        files.len(),
+                        output_path.display()
+                    );
+                    files_failed += 1;
+                    continue;
+                }
+            }
+        };
+
+        let writer = match shared_writer.as_mut() {
+            Some(writer) => writer,
+            None => individual_writer.as_mut().unwrap(),
+        };
 
         // One file's games are held in memory at a time, then written out.
         let games = match read_pgn(file) {
@@ -142,6 +156,14 @@ fn pack(input: &Path, output: &Path, format: OutputFormat) -> anyhow::Result<()>
             positions_scored += game.moves.iter().filter(|m| m.score.is_some()).count();
         }
 
+        if let Some(writer) = individual_writer.as_mut()
+            && let Err(e) = writer.finish()
+        {
+            eprintln!("failed to finish output for {}: {e:#}", file.display());
+            files_failed += 1;
+            continue;
+        }
+
         written_total += written;
         positions_total += positions;
 
@@ -157,7 +179,9 @@ fn pack(input: &Path, output: &Path, format: OutputFormat) -> anyhow::Result<()>
         );
     }
 
-    writer.finish()?;
+    if let Some(writer) = shared_writer.as_mut() {
+        writer.finish()?;
+    }
 
     let elapsed = start.elapsed();
     println!(

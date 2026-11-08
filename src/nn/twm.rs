@@ -1,5 +1,5 @@
-use shakmaty::{Chess, Position};
 use super::math::*;
+use shakmaty::{Chess, Position};
 
 use std::ffi::CString;
 

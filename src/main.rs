@@ -8,10 +8,10 @@ use shakmaty::{Chess, Position};
 
 use crate::history::MoveHistory;
 use crate::nn::data;
+use crate::nn::twm::TWMNet;
 use crate::options::EngineOptions;
 use crate::search::SearchOptions;
 use crate::search::threads::SearchThread;
-use crate::nn::twm::TWMNet;
 
 mod bench;
 mod history;
@@ -53,10 +53,7 @@ fn main() -> Result<(), anyhow::Error> {
                 search::genfens::generate_fens(n, seed, book_path, extra.as_deref())?;
                 return Ok(());
             }
-            ["packpgns", args @ ..] => {
-                pgn_reader::cli::pack_files(args);
-                return Ok(());
-            }
+            ["packpgns", args @ ..] => return pgn_reader::cli::pack_files(args),
             ["balls", ..] => {
                 use crate::nn::trainer::TrainingSteps;
                 use std::path::Path;
@@ -284,7 +281,7 @@ fn main() -> Result<(), anyhow::Error> {
             ["test", ..] => {
                 for i in 1..=50 {
                     let path = format!("checkpoints/test-{}.net", i);
-                    
+
                     match TWMNet::import(&path) {
                         Ok(mut twm_net) => {
                             println!("Successfully loaded: {}", path);

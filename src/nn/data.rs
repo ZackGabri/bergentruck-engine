@@ -2,6 +2,7 @@
 
 use shakmaty::{Chess, Color, Piece, Position, Role};
 
+use super::math::*;
 use crate::pgn_reader::GameRecord;
 use crate::pgn_reader::GameResult;
 use super::math::*;

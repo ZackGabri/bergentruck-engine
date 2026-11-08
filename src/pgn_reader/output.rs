@@ -2,15 +2,37 @@ use std::{
     fs::File,
     io::{BufWriter, Write},
     path::Path,
+    str::FromStr,
 };
 
 use sfbinpack::CompressedTrainingDataEntryWriter;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
     #[default]
     Viriformat,
     Sfbinpack,
+}
+
+impl OutputFormat {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Viriformat => "vf",
+            Self::Sfbinpack => "binpack",
+        }
+    }
+}
+
+impl FromStr for OutputFormat {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        match s {
+            "viriformat" | "viri" | "vf" => Ok(Self::Viriformat),
+            "sfbinpack" | "binpack" | "sfbp" | "sf" => Ok(Self::Sfbinpack),
+            _ => anyhow::bail!("unrecognised packing format: {s}"),
+        }
+    }
 }
 
 pub enum OutputWriter {
@@ -20,30 +42,20 @@ pub enum OutputWriter {
 
 impl OutputWriter {
     pub fn create(path: &Path, format: OutputFormat) -> anyhow::Result<Self> {
-        let extension = match format {
-            OutputFormat::Viriformat => "vf",
-            OutputFormat::Sfbinpack => "binpack",
-        };
+        let buffer = BufWriter::new(File::create(path)?);
 
-        let file = File::create(path.with_extension(extension))?;
-        let buffer = BufWriter::new(file);
-
-        match format {
-            OutputFormat::Viriformat => Ok(Self::Viri(buffer)),
-            OutputFormat::Sfbinpack => Ok(Self::Sfbinpack(Box::new(
-                CompressedTrainingDataEntryWriter::new(buffer)?,
-            ))),
-        }
+        Ok(match format {
+            OutputFormat::Viriformat => Self::Viri(buffer),
+            OutputFormat::Sfbinpack => {
+                Self::Sfbinpack(Box::new(CompressedTrainingDataEntryWriter::new(buffer)?))
+            }
+        })
     }
 
     pub fn write_game(&mut self, game: &super::GameRecord) -> anyhow::Result<()> {
         match self {
-            Self::Viri(writer) => {
-                super::viriformat::write_game(writer, game)?;
-            }
-            Self::Sfbinpack(writer) => {
-                super::sfbinpack::write_game(writer, game)?;
-            }
+            Self::Viri(writer) => super::viriformat::write_game(writer, game)?,
+            Self::Sfbinpack(writer) => super::sfbinpack::write_game(writer, game)?,
         }
 
         Ok(())
