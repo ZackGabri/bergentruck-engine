@@ -34,6 +34,7 @@ impl MoveHistory {
     }
 
     pub fn hash_exists(&self, item: &TTHash) -> bool {
+        #[allow(clippy::needless_range_loop)]
         for i in 0..self.index {
             if *item == self.history[i] {
                 return true;

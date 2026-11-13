@@ -8,6 +8,7 @@ use shakmaty::{CastlingMode, Chess, Color, Move, Position, fen::Fen};
 
 use crate::search::MATE_SCORE;
 
+mod input;
 mod output;
 
 pub mod cli;
@@ -206,8 +207,8 @@ impl Visitor for PgnReader {
 }
 
 /// Returns a list of games in the pgn file as a GameRecord list
-pub fn read_pgn<P: AsRef<Path>>(path: P) -> anyhow::Result<Vec<GameRecord>> {
-    let mut reader = Reader::new(File::open(path)?);
+pub fn read_pgn(reader: impl std::io::Read) -> anyhow::Result<Vec<GameRecord>> {
+    let mut reader = Reader::new(reader);
     let mut visitor = PgnReader;
     let mut all = Vec::new();
     while let Some(game) = reader.read_game(&mut visitor)? {
@@ -221,12 +222,12 @@ pub fn read_pgn<P: AsRef<Path>>(path: P) -> anyhow::Result<Vec<GameRecord>> {
 
 /// Return a list of games from all pgn files in a given directory
 pub fn read_pgns<P: AsRef<Path>>(dir: P) -> anyhow::Result<Vec<GameRecord>> {
-    let files = cli::collect_pgn_files(dir.as_ref())?;
+    let files = input::collect_pgn_files(dir.as_ref())?;
     let mut all = Vec::new();
 
     let mut count = 0;
     for file in files {
-        all.extend(read_pgn(file)?);
+        all.extend(read_pgn(File::open(file)?)?);
         count += 1;
     }
     println!("Read {} games from {} files", all.len(), count);

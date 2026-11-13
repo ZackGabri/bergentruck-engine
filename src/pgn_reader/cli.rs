@@ -1,12 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
 
+use super::GameRecord;
+use super::input::PgnInput;
+use super::input::{collect_pgn_files, read_tar_entries};
 use super::output::{OutputFormat, OutputWriter};
-use super::{GameRecord, read_pgn};
 
 const USAGE: &str = "usage: packpgns --input <file.pgn | directory> [--output <file | folder>] [--format <viriformat/sfbinpack>] [--one-file <true/false>] [--threads <n>]";
 const DEFAULT_OUTPUT: &str = "games";
@@ -68,26 +70,6 @@ pub fn pack_files(args: &[&str]) -> anyhow::Result<()> {
     pack(&input, &output, output_format, as_one, threads)
 }
 
-// A single file, or every .pgn file directly inside a directory
-pub fn collect_pgn_files(input: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    if input.is_file() {
-        return Ok(vec![input.to_path_buf()]);
-    }
-    anyhow::ensure!(input.is_dir(), "{} does not exist", input.display());
-
-    let mut files: Vec<PathBuf> = std::fs::read_dir(input)?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|p| {
-            p.is_file()
-                && p.extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("pgn"))
-        })
-        .collect();
-    files.sort();
-    Ok(files)
-}
-
 /// Items per second, returning 0 instead of dividing by zero on very short runs.
 fn rate(count: usize, elapsed: Duration) -> f64 {
     let secs = elapsed.as_secs_f64();
@@ -113,12 +95,12 @@ fn write_games(writer: &mut OutputWriter, games: &[GameRecord]) -> Stats {
     stats
 }
 
-fn report(index: usize, total: usize, file: &Path, stats: &Stats, elapsed: Duration) {
+fn report(index: usize, total: usize, input: &PgnInput, stats: &Stats, elapsed: Duration) {
     println!(
         "[{}/{}] {}: {} games, {} positions in {:.2?}",
         index + 1,
         total,
-        file.file_name().unwrap_or_default().display(),
+        input.file_name().unwrap_or_default().display(),
         stats.games,
         stats.positions,
         elapsed,
@@ -126,22 +108,22 @@ fn report(index: usize, total: usize, file: &Path, stats: &Stats, elapsed: Durat
 }
 
 // all files go into one shared output file.
-fn pack_shared(files: &[PathBuf], output: &Path, format: OutputFormat) -> anyhow::Result<Stats> {
+fn pack_shared(inputs: &[PgnInput], output: &Path, format: OutputFormat) -> anyhow::Result<Stats> {
     let mut writer = OutputWriter::create(&output.with_extension(format.extension()), format)?;
     let mut total = Stats::default();
 
-    for (i, file) in files.iter().enumerate() {
+    for (i, input) in inputs.iter().enumerate() {
         let file_start = Instant::now();
 
         // One file's games are held in memory at a time, then written out.
-        let games = match read_pgn(file) {
+        let games = match input.read() {
             Ok(games) => games,
             Err(e) => {
                 eprintln!(
                     "[{}/{}] {}: failed to read: {e:#}",
                     i + 1,
-                    files.len(),
-                    file.display()
+                    inputs.len(),
+                    input.path().display()
                 );
                 total.files_failed += 1;
                 continue;
@@ -149,7 +131,7 @@ fn pack_shared(files: &[PathBuf], output: &Path, format: OutputFormat) -> anyhow
         };
 
         let stats = write_games(&mut writer, &games);
-        report(i, files.len(), file, &stats, file_start.elapsed());
+        report(i, inputs.len(), input, &stats, file_start.elapsed());
         total.merge(&stats);
     }
 
@@ -158,13 +140,9 @@ fn pack_shared(files: &[PathBuf], output: &Path, format: OutputFormat) -> anyhow
 }
 
 // reads one pgn and writes it to its own file inside `out_dir`
-fn pack_one(file: &Path, out_dir: &Path, format: OutputFormat) -> anyhow::Result<Stats> {
-    let games = read_pgn(file)?;
-
-    let name = file
-        .file_name()
-        .with_context(|| format!("{} has no file name", file.display()))?;
-    let path = out_dir.join(name).with_extension(format.extension());
+fn pack_one(input: &PgnInput, out_dir: &Path, format: OutputFormat) -> anyhow::Result<Stats> {
+    let games = input.read()?;
+    let path = input.output_path(out_dir, format)?;
 
     let mut writer = OutputWriter::create(&path, format)
         .with_context(|| format!("failed to create {}", path.display()))?;
@@ -174,7 +152,12 @@ fn pack_one(file: &Path, out_dir: &Path, format: OutputFormat) -> anyhow::Result
 }
 
 // yay, threading
-fn pack_parallel(files: &[PathBuf], out_dir: &Path, format: OutputFormat, threads: usize) -> Stats {
+fn pack_parallel(
+    files: &[PgnInput],
+    out_dir: &Path,
+    format: OutputFormat,
+    threads: usize,
+) -> Stats {
     let next = AtomicUsize::new(0);
     let next = &next;
     let worker_count = threads.min(files.len());
@@ -201,7 +184,7 @@ fn pack_parallel(files: &[PathBuf], out_dir: &Path, format: OutputFormat, thread
                                 "[{}/{}] {}: failed: {e:#}",
                                 i + 1,
                                 files.len(),
-                                file.display()
+                                file.path().display()
                             );
                             total.files_failed += 1;
                         }
@@ -226,22 +209,43 @@ fn pack(
     as_one: bool,
     threads: usize,
 ) -> anyhow::Result<()> {
-    let files = collect_pgn_files(input)?;
+    let is_tar = input.is_file() && input.extension().is_some_and(|v| v == "tar");
+    let blobs = if is_tar {
+        read_tar_entries(input)?
+    } else {
+        Vec::new()
+    };
+
+    let inputs: Vec<PgnInput> = if is_tar {
+        blobs
+            .iter()
+            .map(|(name, data)| PgnInput::Bz2 {
+                name: name.clone(),
+                data,
+            })
+            .collect()
+    } else {
+        collect_pgn_files(input)?
+            .into_iter()
+            .map(PgnInput::File)
+            .collect()
+    };
+
     anyhow::ensure!(
-        !files.is_empty(),
-        "no .pgn files found in {}",
+        !inputs.is_empty(),
+        "no .pgn/.bz2 files found in {}",
         input.display()
     );
 
     let start = Instant::now();
 
     let total = if as_one {
-        pack_shared(&files, output, format)?
+        pack_shared(&inputs, output, format)?
     } else {
         std::fs::create_dir_all(output)
             .with_context(|| format!("failed to create folder {}", output.display()))?;
-        println!("using {} thread(s)", threads.min(files.len()));
-        pack_parallel(&files, output, format, threads)
+        println!("using {} thread(s)", threads.min(inputs.len()));
+        pack_parallel(&inputs, output, format, threads)
     };
 
     let elapsed = start.elapsed();
