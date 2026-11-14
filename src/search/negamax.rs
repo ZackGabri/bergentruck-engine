@@ -109,7 +109,7 @@ pub struct Negamax {
     improving_table: [ImprovingStackEntry; MAX_PLY],
     history_table: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
-    accumulators: [[network::Accumulator; 2]; MAX_PLY],
+    accumulators: Box<[[network::Accumulator; 2]; MAX_PLY]>,
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
     pub stop: Arc<AtomicBool>,
@@ -123,7 +123,7 @@ impl Negamax {
             improving_table: [ImprovingStackEntry::default(); MAX_PLY],
             history_table: [[[0; 64]; 64]; 2],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
-            accumulators: [[network::Accumulator::default(); 2]; MAX_PLY],
+            accumulators: Box::new([[network::Accumulator::default(); 2]; MAX_PLY]),
             max_hard_nodes: None,
             hard_deadline: None,
             stop: Arc::default(),
