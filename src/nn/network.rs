@@ -11,7 +11,7 @@ const QA: i16 = 255;
 // changing it would put w above that bound and potentially break stuff
 const QB: i16 = 64;
 
-static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Roulx_I.bin")) };
+static NNUE: Network = unsafe { std::mem::transmute(*include_bytes!("networks/Roulx_II.bin")) };
 
 /// This is the quantised format that bullet outputs.
 #[repr(C)]
