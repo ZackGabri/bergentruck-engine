@@ -22,7 +22,7 @@ pub static ASP_ITERS: AtomicUsize = AtomicUsize::new(0);
 pub const MATE_SCORE: i32 = 100_000;
 pub const MATE_THRESHOLD: i32 = MATE_SCORE - 1000;
 pub const MAX_PLY: usize = 128;
-pub const DEFAULT_ASPIRATION_WINDOW: i32 = 18;
+pub const DEFAULT_ASPIRATION_WINDOW: i32 = 36;
 
 // Helper function to print search info
 fn print_info(
