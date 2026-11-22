@@ -320,7 +320,7 @@ impl Negamax {
                     let static_eval = static_eval.get_or_insert(self.static_eval(position, ply));
 
                     // Discard moves with no potential to raise alpha
-                    if *static_eval + (300 * depth) as i32 <= alpha {
+                    if *static_eval + (depth * 70 + 86) as i32 <= alpha {
                         continue;
                     }
                 }
