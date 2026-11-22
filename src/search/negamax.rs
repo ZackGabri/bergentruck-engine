@@ -316,7 +316,7 @@ impl Negamax {
             // Move loop pruning
             if !is_root && !pv_node && !in_check && !is_mate {
                 // Futility pruning
-                if depth <= 3 && move_index >= 4 {
+                if is_quiet && depth <= 3 && move_index >= 4 {
                     let static_eval = static_eval.get_or_insert(self.static_eval(position, ply));
 
                     // Discard moves with no potential to raise alpha
