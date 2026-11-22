@@ -252,8 +252,9 @@ impl Negamax {
                 // Make sure it's not king and pawn endgame
                 let board = position.board();
                 let non_pawns = (board.by_color(turn) & (!board.pawns())) & (!board.kings());
+                let margin = i32::from(improving) * 132;
 
-                if non_pawns.any() && static_eval >= beta {
+                if non_pawns.any() && static_eval + margin >= beta {
                     let null_position = position.clone().swap_turn().unwrap();
                     self.accumulators[ply + 1] = self.accumulators[ply];
                     let reduction = 3 + depth / 3;
