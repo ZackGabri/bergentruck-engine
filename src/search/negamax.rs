@@ -256,7 +256,9 @@ impl Negamax {
                 if non_pawns.any() && static_eval >= beta {
                     let null_position = position.clone().swap_turn().unwrap();
                     self.accumulators[ply + 1] = self.accumulators[ply];
-                    let reduction = 3 + depth / 3 + ((static_eval - beta) / 191).min(3) as usize;
+                    // Ethereal tech to scale NMP reduction based on eval - beta.
+                    let eval_reduction = ((static_eval - beta) / 191).min(3) as usize; // capped at 3 extra ply
+                    let reduction = 3 + depth / 3 + eval_reduction;
                     let null_score = -self.negamax(
                         // search with zero window
                         &null_position,
