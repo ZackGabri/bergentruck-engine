@@ -385,7 +385,6 @@ impl Negamax {
                 let lmr_conditions = !in_check
                     && depth >= 3
                     && move_index >= 3
-                    && is_quiet
                     && !self.killer_move_table[ply].contains_move(mov);
 
                 let lmr_reduction = if lmr_conditions {
