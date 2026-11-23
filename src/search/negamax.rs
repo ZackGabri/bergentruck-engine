@@ -390,7 +390,7 @@ impl Negamax {
                 let mut lmr_reduction = 0;
                 if lmr_conditions {
                     lmr_reduction += get_lmr_table()[improving as usize][depth][move_index] as usize;
-                    lmr_reduction += !self.killer_move_table[ply].contains_move(mov) as usize;
+                    lmr_reduction -= is_killer as usize;
                 }
 
                 // Perform zero-window search (ZWS) on non-PV nodes
