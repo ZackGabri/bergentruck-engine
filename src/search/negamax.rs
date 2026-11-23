@@ -256,7 +256,7 @@ impl Negamax {
                 if non_pawns.any() && static_eval >= beta {
                     let null_position = position.clone().swap_turn().unwrap();
                     self.accumulators[ply + 1] = self.accumulators[ply];
-                    let reduction = 3 + depth / 3;
+                    let reduction = 3 + depth / 3 + ((static_eval - beta) / 191).min(3) as usize;
                     let null_score = -self.negamax(
                         // search with zero window
                         &null_position,
