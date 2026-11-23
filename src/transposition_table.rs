@@ -100,17 +100,22 @@ impl TTable {
     // estimates how full the hash table is by sampling a few hashes
     pub fn hashfull(&self) -> u32 {
         const SAMPLE: usize = 1000;
+        if self.length == 0 {
+            return 0;
+        }
+
+        let stride = (self.length / SAMPLE).max(1); // to avoid .step_by(0) panic
+        let mut sampled = 0;
         let mut used = 0;
 
-        let stride = self.length / SAMPLE;
-        for i in (0..self.length).step_by(stride) {
+        for i in (0..self.length).step_by(stride).take(SAMPLE) {
+            sampled += 1;
             if self.table[i].hash.0 != 0 {
                 used += 1;
             }
         }
 
-        // return 0-1000 like UCI expects
-        (used * 1000 / SAMPLE) as u32
+        ((used * 1000) / sampled) as u32
     }
 }
 
