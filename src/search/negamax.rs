@@ -70,11 +70,11 @@ impl KillerMoves {
 pub const MAX_PSUEDO_MOVES: usize = 280;
 
 // Late Move Reductions table
-// 3D LMR table: [improving][depth][move_num]
-static LMR_TABLE: OnceLock<[[[u8; MAX_PSUEDO_MOVES]; MAX_PLY]; 2]> = OnceLock::new();
-fn get_lmr_table() -> &'static [[[u8; MAX_PSUEDO_MOVES]; MAX_PLY]; 2] {
+// 4D LMR table: [improving][is_quiet][depth][move_num]
+static LMR_TABLE: OnceLock<[[[[u8; MAX_PSUEDO_MOVES]; MAX_PLY]; 2]; 2]> = OnceLock::new();
+fn get_lmr_table() -> &'static [[[[u8; MAX_PSUEDO_MOVES]; MAX_PLY]; 2]; 2] {
     LMR_TABLE.get_or_init(|| {
-        let mut table = [[[0; MAX_PSUEDO_MOVES]; MAX_PLY]; 2];
+        let mut table = [[[[0; MAX_PSUEDO_MOVES]; MAX_PLY]; 2]; 2];
 
         let mut depth = 1;
         while depth < MAX_PLY {
@@ -82,11 +82,13 @@ fn get_lmr_table() -> &'static [[[u8; MAX_PSUEDO_MOVES]; MAX_PLY]; 2] {
             while move_num < MAX_PSUEDO_MOVES {
                 let base = 0.50 + (depth as f64).ln() * (move_num as f64).ln() / 3.00;
 
-                // reduce more when not improving
-                table[0][depth][move_num] = (base + 0.5).round() as u8;
+                // capture moves (-0.5 overall compared to quiet moves)
+                table[0][0][depth][move_num] = (base + 0.0).round() as u8; // reduce more when not improving
+                table[1][0][depth][move_num] = (base - 1.0).round() as u8; // reduce less when improving
 
-                // reduce less when improving
-                table[1][depth][move_num] = (base - 0.5).round() as u8;
+                // quiet moves
+                table[0][1][depth][move_num] = (base + 1.0).round() as u8; // reduce more when not improving
+                table[1][1][depth][move_num] = (base - 0.0).round() as u8; // reduce less when improving
 
                 move_num += 1;
             }
@@ -388,7 +390,7 @@ impl Negamax {
                     && !self.killer_move_table[ply].contains_move(mov);
 
                 let lmr_reduction = if lmr_conditions {
-                    get_lmr_table()[improving as usize][depth][move_index]
+                    get_lmr_table()[improving as usize][is_quiet as usize][depth][move_index]
                 } else {
                     0
                 } as usize;
