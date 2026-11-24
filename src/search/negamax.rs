@@ -80,15 +80,17 @@ fn get_lmr_table() -> &'static [[[[u8; MAX_PSUEDO_MOVES]; MAX_PLY]; 2]; 2] {
         while depth < MAX_PLY {
             let mut move_num = 1;
             while move_num < MAX_PSUEDO_MOVES {
-                let base = 0.50 + (depth as f64).ln() * (move_num as f64).ln() / 3.00;
+                // Reduce more for quiet moves
+                let quiet_base = 0.50 + (depth as f64).ln() * (move_num as f64).ln() / 3.00;
+                let noisy_base = 0.00 + (depth as f64).ln() * (move_num as f64).ln() / 3.00;
 
-                // capture moves (-0.5 overall compared to quiet moves)
-                table[0][0][depth][move_num] = (base + 0.0).round() as u8; // reduce more when not improving
-                table[1][0][depth][move_num] = (base - 1.0).round() as u8; // reduce less when improving
+                // capture moves
+                table[0][0][depth][move_num] = (noisy_base + 0.5).round() as u8; // reduce more when not improving
+                table[1][0][depth][move_num] = (noisy_base - 0.5).round() as u8; // reduce less when improving
 
                 // quiet moves
-                table[0][1][depth][move_num] = (base + 1.0).round() as u8; // reduce more when not improving
-                table[1][1][depth][move_num] = (base - 0.0).round() as u8; // reduce less when improving
+                table[0][1][depth][move_num] = (quiet_base + 0.5).round() as u8; // reduce more when not improving
+                table[1][1][depth][move_num] = (quiet_base - 0.5).round() as u8; // reduce less when improving
 
                 move_num += 1;
             }
