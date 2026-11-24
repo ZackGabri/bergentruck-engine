@@ -109,6 +109,7 @@ pub struct Negamax {
     improving_table: [ImprovingStackEntry; MAX_PLY],
     quiet_history: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
+    countermove_table: [[Option<Move>; 64]; 64],
     accumulators: Box<[[network::Accumulator; 2]; MAX_PLY]>,
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
@@ -123,6 +124,7 @@ impl Negamax {
             improving_table: [ImprovingStackEntry::default(); MAX_PLY],
             quiet_history: [[[0; 64]; 64]; 2],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
+            countermove_table: [[None; 64]; 64],
             accumulators: Box::new([[network::Accumulator::default(); 2]; MAX_PLY]),
             max_hard_nodes: None,
             hard_deadline: None,
@@ -300,7 +302,7 @@ impl Negamax {
         }
 
         // push current position hash before exploring children
-        history.push_hash(hash);
+        history.push_hash(hash, None);
 
         let mut best_move = None;
         let mut child_pv = PVariation::default();
@@ -455,7 +457,10 @@ impl Negamax {
                     let bonus = (depth * depth) as i32;
                     self.update_history(turn, &mov, bonus);
                     self.store_killer_move(ply, mov);
-
+                    if let Some(previous_move) = history.last_move() {
+                        self.store_countermove(previous_move, mov);
+                    }
+                    
                     // history maluses
                     for q in &quiets_tried {
                         self.update_history(turn, q, -bonus);
@@ -616,6 +621,12 @@ impl Negamax {
                 }
             } else if killers.contains_move(m) {
                 1_000_000_000 // Same value as MVV-LVA so it's above bad captures but below good ones
+            } else if let Some(countermove) = self.get_countermove(m) {
+                if countermove == m {
+                    500_000_000 
+                } else {
+                    0
+                }
             } else {
                 // History moves
                 self.quiet_history[turn][m.from().unwrap() as usize][m.to() as usize]
@@ -643,5 +654,23 @@ impl Negamax {
         if !self.killer_move_table[ply].contains_move(m) {
             self.killer_move_table[ply].insert_move(m);
         }
+    }
+
+    fn store_countermove(&mut self, m: Move, countermove: Move) {
+        let Some(from_sq) = m.from() else {
+            return;
+        };
+        let from = usize::from(from_sq);
+        let to = usize::from(m.to());
+        self.countermove_table[from][to] = Some(countermove);
+    }
+
+    fn get_countermove(&self, m: Move) -> Option<Move> {
+        let Some(from_sq) = m.from() else {
+            return None;
+        };
+        let from = usize::from(from_sq);
+        let to = usize::from(m.to());
+        self.countermove_table[from][to]
     }
 }
