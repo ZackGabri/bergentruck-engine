@@ -4,6 +4,7 @@ use std::sync::{Arc, OnceLock};
 use shakmaty::{Chess, Move, MoveList, Position};
 
 use crate::history::MoveHistory;
+use crate::history::HISTORY_SIZE;
 use crate::nn::network;
 use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
@@ -67,6 +68,40 @@ impl KillerMoves {
     }
 }
 
+struct PastMoveHistory {
+    pub moves: [Option<Move>; HISTORY_SIZE],
+    pub index: usize,
+}
+
+impl PastMoveHistory {
+    fn default() -> Self {
+        Self {
+            moves: [None; HISTORY_SIZE],
+            index: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn add_move(&mut self, m: Move) {
+        self.moves[self.index] = Some(m);
+        self.index += 1;
+    }
+
+    #[inline(always)]
+    fn pop(&mut self) {
+        self.index = self.index.saturating_sub(1);
+    }
+
+    #[inline(always)]
+    fn last_move(&self) -> Option<Move> {
+        if self.index == 0 {
+            None
+        } else {
+            self.moves[self.index - 1]
+        }
+    }
+}
+
 pub const MAX_PSUEDO_MOVES: usize = 280;
 
 // Late Move Reductions table
@@ -109,6 +144,7 @@ pub struct Negamax {
     improving_table: [ImprovingStackEntry; MAX_PLY],
     quiet_history: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
+    move_history: PastMoveHistory,
     countermove_table: [[Option<Move>; 64]; 64],
     accumulators: Box<[[network::Accumulator; 2]; MAX_PLY]>,
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
@@ -124,6 +160,7 @@ impl Negamax {
             improving_table: [ImprovingStackEntry::default(); MAX_PLY],
             quiet_history: [[[0; 64]; 64]; 2],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
+            move_history: PastMoveHistory::default(),
             countermove_table: [[None; 64]; 64],
             accumulators: Box::new([[network::Accumulator::default(); 2]; MAX_PLY]),
             max_hard_nodes: None,
@@ -302,7 +339,7 @@ impl Negamax {
         }
 
         // push current position hash before exploring children
-        history.push_hash(hash, None);
+        history.push_hash(hash);
 
         let mut best_move = None;
         let mut child_pv = PVariation::default();
@@ -372,6 +409,7 @@ impl Negamax {
 
             let mut position = position.clone();
             position.play_unchecked(mov);
+            self.move_history.add_move(mov);
 
             self.accumulators[ply + 1] = self.accumulators[ply];
             network::apply_move(&mut self.accumulators[ply + 1], &mov, turn);
@@ -438,6 +476,8 @@ impl Negamax {
                 );
             }
 
+            self.move_history.pop();
+
             if score > max {
                 max = score;
                 best_move = Some(mov);
@@ -457,7 +497,7 @@ impl Negamax {
                     let bonus = (depth * depth) as i32;
                     self.update_history(turn, &mov, bonus);
                     self.store_killer_move(ply, mov);
-                    if let Some(previous_move) = history.last_move() {
+                    if let Some(previous_move) = self.move_history.last_move() {
                         self.store_countermove(previous_move, mov);
                     }
                     
@@ -605,6 +645,10 @@ impl Negamax {
         let move_list = position.legal_moves();
         let turn = position.turn() as usize;
         let killers = self.killer_move_table[ply];
+        let countermove = self
+            .move_history
+            .last_move()
+            .and_then(|prev| self.get_countermove(prev));
 
         let mut scored: Vec<(i32, Move, Option<bool>)> = Vec::with_capacity(move_list.len());
         for m in move_list {
@@ -621,14 +665,11 @@ impl Negamax {
                 }
             } else if killers.contains_move(m) {
                 1_000_000_000 // Same value as MVV-LVA so it's above bad captures but below good ones
-            } else if let Some(countermove) = self.get_countermove(m) {
-                if countermove == m {
-                    500_000_000 
-                } else {
-                    0
-                }
+            } else if countermove == Some(m) {
+                // Countermove heuristic
+                500_000_000 
             } else {
-                // History moves
+                // Regular quiet history heuristic
                 self.quiet_history[turn][m.from().unwrap() as usize][m.to() as usize]
             };
 

@@ -117,7 +117,7 @@ fn main() -> Result<(), anyhow::Error> {
                             let m = uci.to_move(&pos).unwrap();
 
                             pos.play_unchecked(m);
-                            history.push_position(&pos, Some(m));
+                            history.push_position(&pos);
                         }
                     }
                 }
@@ -144,14 +144,14 @@ fn main() -> Result<(), anyhow::Error> {
                     };
 
                     pos = fen?.into_position(mode)?;
-                    history.push_position(&pos, None);
+                    history.push_position(&pos);
 
                     for m in moves {
                         let uci: UciMove = m.trim().parse()?;
                         let m = uci.to_move(&pos)?;
 
                         pos.play_unchecked(m);
-                        history.push_position(&pos, Some(m));
+                        history.push_position(&pos);
                     }
                 }
                 _ => {}
