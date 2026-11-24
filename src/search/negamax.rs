@@ -107,7 +107,7 @@ pub struct ImprovingStackEntry {
 pub struct Negamax {
     pub node_count: u64,
     improving_table: [ImprovingStackEntry; MAX_PLY],
-    history_table: [[[i32; 64]; 64]; 2],
+    quiet_history: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
     accumulators: Box<[[network::Accumulator; 2]; MAX_PLY]>,
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
@@ -121,7 +121,7 @@ impl Negamax {
         Self {
             node_count: 0,
             improving_table: [ImprovingStackEntry::default(); MAX_PLY],
-            history_table: [[[0; 64]; 64]; 2],
+            quiet_history: [[[0; 64]; 64]; 2],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
             accumulators: Box::new([[network::Accumulator::default(); 2]; MAX_PLY]),
             max_hard_nodes: None,
@@ -304,6 +304,7 @@ impl Negamax {
 
         let mut best_move = None;
         let mut child_pv = PVariation::default();
+        let mut quiets_tried: Vec<Move> = Vec::with_capacity(32);
 
         for (move_index, (_, mov, passed_0see)) in moves.into_iter().enumerate() {
             if depth > 1 && self.has_reached_limit() {
@@ -451,17 +452,21 @@ impl Negamax {
             if score >= beta {
                 // store quiet moves
                 if is_quiet {
-                    let from = match mov.from() {
-                        Some(v) => v,
-                        None => break,
-                    } as usize;
-                    let to = mov.to() as usize;
-
-                    self.history_table[turn as usize][from][to] += (depth * depth) as i32;
+                    let bonus = (depth * depth) as i32;
+                    self.update_history(turn, &mov, bonus);
                     self.store_killer_move(ply, mov);
+
+                    // history maluses
+                    for q in &quiets_tried {
+                        self.update_history(turn, q, -bonus);
+                    }
                 }
 
                 break;
+            }
+
+            if is_quiet {
+                quiets_tried.push(mov);
             }
         }
 
@@ -490,6 +495,18 @@ impl Negamax {
         }
 
         max
+    }
+
+    fn update_history(&mut self, color: shakmaty::Color, mov: &Move, bonus: i32) {
+        let max_history: i32 = 16384;
+
+        let from = mov.from().unwrap() as usize;
+        let to = mov.to() as usize;
+
+        let clamped_bonus = bonus.clamp(-max_history, max_history);
+
+        let entry = &mut self.quiet_history[color as usize][from][to];
+        *entry += clamped_bonus - *entry * clamped_bonus.abs() / max_history;
     }
 
     #[inline(always)]
@@ -601,7 +618,7 @@ impl Negamax {
                 1_000_000_000 // Same value as MVV-LVA so it's above bad captures but below good ones
             } else {
                 // History moves
-                self.history_table[turn][m.from().unwrap() as usize][m.to() as usize]
+                self.quiet_history[turn][m.from().unwrap() as usize][m.to() as usize]
             };
 
             scored.push((score, m, above_0_see));
