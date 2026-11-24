@@ -3,8 +3,8 @@ use std::sync::{Arc, OnceLock};
 
 use shakmaty::{Chess, Move, MoveList, Position};
 
-use crate::history::MoveHistory;
 use crate::nn::network;
+use crate::search::repetition::RepetitionTable;
 use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
 
@@ -106,10 +106,13 @@ pub struct ImprovingStackEntry {
 // struct for shared data between every negamax call
 pub struct Negamax {
     pub node_count: u64,
+    pub repetition: RepetitionTable,
+
     improving_table: [ImprovingStackEntry; MAX_PLY],
     quiet_history: [[[i32; 64]; 64]; 2],
     killer_move_table: [KillerMoves; MAX_PLY],
     accumulators: Box<[[network::Accumulator; 2]; MAX_PLY]>,
+
     pub max_hard_nodes: Option<u64>, // maximum number of nodes to search
     pub hard_deadline: Option<minstant::Instant>, // deadline for the search to stop at
     pub stop: Arc<AtomicBool>,
@@ -120,6 +123,7 @@ impl Negamax {
     pub fn new() -> Self {
         Self {
             node_count: 0,
+            repetition: RepetitionTable::new(),
             improving_table: [ImprovingStackEntry::default(); MAX_PLY],
             quiet_history: [[[0; 64]; 64]; 2],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
@@ -135,7 +139,6 @@ impl Negamax {
     pub fn negamax(
         &mut self,
         position: &Chess,
-        history: &mut MoveHistory,
         mut depth: usize,
         ply: usize,
         mut alpha: i32,
@@ -165,15 +168,17 @@ impl Negamax {
 
         let original_alpha = alpha;
         let hash = position.zobrist_hash(shakmaty::EnPassantMode::Legal);
+        let halfmoves = position.halfmoves();
 
-        // if hash already exists then this is the second time we're in the position
-        // it's the same as checking if there's 2 hashes in the history
-        if (history.hash_exists(&hash) && ply > 0)
+        if (self.repetition.is_repetition(ply, &hash, halfmoves) && ply > 0)
             || position.is_insufficient_material()
-            || position.halfmoves() >= 100
+            || halfmoves >= 100
         {
             return 0;
         }
+
+        // push current position hash before exploring children
+        self.repetition.set_ply(ply, hash);
 
         let tt_entry = transposition_table::get(hash);
         let tt_hit = tt_entry.hash == hash;
@@ -262,7 +267,6 @@ impl Negamax {
                     let null_score = -self.negamax(
                         // search with zero window
                         &null_position,
-                        history,
                         depth.saturating_sub(reduction),
                         ply + 1,
                         -beta,
@@ -299,16 +303,12 @@ impl Negamax {
             }
         }
 
-        // push current position hash before exploring children
-        history.push_hash(hash);
-
         let mut best_move = None;
         let mut child_pv = PVariation::default();
         let mut quiets_tried: Vec<Move> = Vec::with_capacity(32);
 
         for (move_index, (_, mov, passed_0see)) in moves.into_iter().enumerate() {
             if depth > 1 && self.has_reached_limit() {
-                history.pop();
                 return alpha;
             }
 
@@ -398,7 +398,6 @@ impl Negamax {
                 // Perform zero-window search (ZWS) on non-PV nodes
                 score = -self.negamax(
                     &position,
-                    history,
                     depth.saturating_sub(lmr_reduction + 1),
                     ply + 1,
                     -alpha - 1,
@@ -411,7 +410,6 @@ impl Negamax {
                 if lmr_reduction > 0 && score > alpha {
                     score = -self.negamax(
                         &position,
-                        history,
                         depth - 1,
                         ply + 1,
                         -alpha - 1,
@@ -426,7 +424,6 @@ impl Negamax {
             if pv_node && (move_index == 0 || score > alpha) {
                 score = -self.negamax(
                     &position,
-                    history,
                     depth - 1,
                     ply + 1,
                     -beta,
@@ -469,9 +466,6 @@ impl Negamax {
                 quiets_tried.push(mov);
             }
         }
-
-        // backtrack history after exploring this node's branch
-        history.pop();
 
         if replace_tt {
             let bound = if max <= original_alpha {

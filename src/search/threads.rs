@@ -5,8 +5,7 @@ use std::{io, thread};
 use shakmaty::{Chess, Position};
 
 use super::SearchOptions;
-
-use crate::history::MoveHistory;
+use super::repetition::RepetitionTable;
 
 pub fn stop_search(search_thread: &mut Option<SearchThread>) {
     if let Some(thread) = search_thread.take() {
@@ -23,11 +22,11 @@ pub struct SearchThread {
 impl SearchThread {
     pub fn spawn(
         position: &Chess,
-        history: &MoveHistory,
+        repetition: &RepetitionTable,
         options: SearchOptions,
     ) -> io::Result<Self> {
         let position = position.clone();
-        let mut history = history.clone();
+        let mut repetition = repetition.clone();
 
         let stop = Arc::clone(&options.stop);
         let thread_stop = Arc::clone(&stop);
@@ -38,7 +37,7 @@ impl SearchThread {
         let handle = thread::Builder::new()
             .name("search".into())
             .spawn(move || {
-                let (best_move, _, _) = super::search(&position, Some(&mut history), options);
+                let (best_move, _, _) = super::search(&position, Some(&mut repetition), options);
 
                 // `go infinite` shouldn't print a move until `stop` is recieved, even if the search finishes
                 if infinite {

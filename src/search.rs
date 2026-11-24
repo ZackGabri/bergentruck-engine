@@ -1,5 +1,6 @@
-use crate::{history::MoveHistory, search::negamax::PVariation, transposition_table};
+use crate::{search::negamax::PVariation, transposition_table};
 use negamax::Negamax;
+use repetition::RepetitionTable;
 
 use shakmaty::{Chess, Color, Move, Position};
 use std::sync::Arc;
@@ -9,6 +10,7 @@ use std::time::Duration;
 pub mod eval;
 pub mod genfens;
 pub mod negamax;
+pub mod repetition;
 pub mod see;
 pub mod threads;
 
@@ -74,7 +76,7 @@ pub struct SearchOptions {
 
 pub fn search(
     position: &Chess,
-    history: Option<&mut MoveHistory>,
+    repetition: Option<&mut RepetitionTable>,
     search_options: SearchOptions,
 ) -> (Option<Move>, u64, i32) {
     let SearchOptions {
@@ -90,6 +92,7 @@ pub fn search(
     } = search_options;
 
     let mut negamax = Negamax::new();
+    negamax.repetition = repetition.cloned().unwrap_or_default();
     negamax.max_hard_nodes = max_hard_nodes;
     negamax.hard_deadline = hard_deadline;
     negamax.stop = stop;
@@ -113,9 +116,6 @@ pub fn search(
         });
         (limit_ms, false)
     };
-
-    let mut default_history = MoveHistory::default();
-    let history = history.unwrap_or(&mut default_history);
 
     // aspiration window variables
     let mut alpha = -MATE_SCORE;
@@ -141,7 +141,7 @@ pub fn search(
 
         let mut iter_pv = PVariation::default(); // don't reuse pv from previous iteration, since it 
         // may be invalid if the search fails
-        let score = negamax.negamax(position, history, depth, 0, alpha, beta, &mut iter_pv, true);
+        let score = negamax.negamax(position, depth, 0, alpha, beta, &mut iter_pv, true);
 
         if negamax.has_reached_limit() {
             if depth == 1 {

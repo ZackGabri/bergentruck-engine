@@ -6,14 +6,13 @@ use shakmaty::fen::Fen;
 use shakmaty::uci::UciMove;
 use shakmaty::{Chess, Position};
 
-use crate::history::MoveHistory;
 use crate::nn::data;
 use crate::options::EngineOptions;
 use crate::search::SearchOptions;
+use crate::search::repetition::RepetitionTable;
 use crate::search::threads::SearchThread;
 
 mod bench;
-mod history;
 mod nn;
 mod options;
 mod search;
@@ -30,7 +29,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
-    let mut history = MoveHistory::new();
+    let mut repetition = RepetitionTable::new();
 
     let mut search_thread: Option<SearchThread> = None;
 
@@ -106,8 +105,9 @@ fn main() -> Result<(), anyhow::Error> {
             ["position"] => {}
             ["position", pos_type, args @ ..] => match *pos_type {
                 "startpos" => {
-                    history.reset();
+                    repetition.reset();
                     pos = Chess::default();
+                    repetition.push_position(&pos);
 
                     if args.first().copied() == Some("moves") {
                         let moves = args.get(1..).unwrap_or_default();
@@ -117,12 +117,15 @@ fn main() -> Result<(), anyhow::Error> {
                             let m = uci.to_move(&pos).unwrap();
 
                             pos.play_unchecked(m);
-                            history.push_position(&pos);
+                            repetition.push_position(&pos);
                         }
                     }
+
+                    // remove "root" position to avoid duplicate from negamax adding it
+                    repetition.index -= 1;
                 }
                 "fen" => {
-                    history.reset();
+                    repetition.reset();
 
                     let (fen_args, moves) = match args.iter().position(|&s| s == "moves") {
                         Some(idx) => (&args[..idx], &args[idx + 1..]),
@@ -144,15 +147,18 @@ fn main() -> Result<(), anyhow::Error> {
                     };
 
                     pos = fen?.into_position(mode)?;
-                    history.push_position(&pos);
+                    repetition.push_position(&pos);
 
                     for m in moves {
                         let uci: UciMove = m.trim().parse()?;
                         let m = uci.to_move(&pos)?;
 
                         pos.play_unchecked(m);
-                        history.push_position(&pos);
+                        repetition.push_position(&pos);
                     }
+
+                    // remove "root" position to avoid duplicate from negamax adding it
+                    repetition.index -= 1;
                 }
                 _ => {}
             },
@@ -163,7 +169,7 @@ fn main() -> Result<(), anyhow::Error> {
                     ..Default::default()
                 };
 
-                search_thread = Some(SearchThread::spawn(&pos, &history, search_options)?);
+                search_thread = Some(SearchThread::spawn(&pos, &repetition, search_options)?);
             }
             ["go", "movetime", val] => {
                 // Fixed time per move, set both hard and soft deadlines to the same value
@@ -179,7 +185,7 @@ fn main() -> Result<(), anyhow::Error> {
                     ..Default::default()
                 };
 
-                search_thread = Some(SearchThread::spawn(&pos, &history, search_options)?);
+                search_thread = Some(SearchThread::spawn(&pos, &repetition, search_options)?);
             }
             ["go", args @ ..] => {
                 let search_args = args.chunks(2);
@@ -218,7 +224,7 @@ fn main() -> Result<(), anyhow::Error> {
                     ..Default::default()
                 };
 
-                search_thread = Some(SearchThread::spawn(&pos, &history, search_options)?);
+                search_thread = Some(SearchThread::spawn(&pos, &repetition, search_options)?);
             }
             ["stop", ..] => search::threads::stop_search(&mut search_thread),
 
