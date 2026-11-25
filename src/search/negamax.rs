@@ -408,7 +408,7 @@ impl Negamax {
                 if new_depth == 0 && !pv_node && !in_check && is_quiet && quiets_tried.len() >= 5 {
                     let history_score = self.quiet_history[turn as usize]
                         [mov.from().unwrap() as usize][mov.to() as usize];
-                    if history_score < -MAX_HISTORY / 8 {
+                    if history_score < -MAX_HISTORY / 512 {
                         continue;
                     }
                 }
@@ -507,6 +507,17 @@ impl Negamax {
         }
 
         max
+    }
+
+    // Debug function
+    #[allow(unused)]
+    pub fn print_history_stats(&self) {
+        let min = self.quiet_history.iter().flatten().flatten().min().unwrap();
+        let max = self.quiet_history.iter().flatten().flatten().max().unwrap();
+        let avg = self.quiet_history.iter().flatten().flatten().sum::<i32>()
+            / (self.quiet_history.len() * self.quiet_history[0].len()
+                * self.quiet_history[0][0].len()) as i32;
+        println!("History stats: min: {min}, max: {max}, avg: {avg}");
     }
 
     fn update_history(&mut self, color: shakmaty::Color, mov: &Move, bonus: i32) {
