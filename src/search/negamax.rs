@@ -109,7 +109,8 @@ pub struct Negamax {
     pub repetition: RepetitionTable,
 
     improving_table: [ImprovingStackEntry; MAX_PLY],
-    quiet_history: [[[i32; 64]; 64]; 2],
+    quiet_history: [[[i32; 64]; 64]; 2], // [colour][from square][to square]
+    capture_history: [[[i32; 6]; 64]; 6], // [moved piece][target square][captured piece type]
     killer_move_table: [KillerMoves; MAX_PLY],
     accumulators: Box<[[network::Accumulator; 2]; MAX_PLY]>,
 
@@ -126,6 +127,7 @@ impl Negamax {
             repetition: RepetitionTable::new(),
             improving_table: [ImprovingStackEntry::default(); MAX_PLY],
             quiet_history: [[[0; 64]; 64]; 2],
+            capture_history: [[[0; 6]; 64]; 6],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
             accumulators: Box::new([[network::Accumulator::default(); 2]; MAX_PLY]),
             max_hard_nodes: None,
@@ -306,6 +308,7 @@ impl Negamax {
         let mut best_move = None;
         let mut child_pv = PVariation::default();
         let mut quiets_tried: Vec<Move> = Vec::with_capacity(32);
+        let mut captures_tried: Vec<Move> = Vec::with_capacity(32);
 
         for (move_index, (_, mov, passed_0see)) in moves.into_iter().enumerate() {
             if depth > 1 && self.has_reached_limit() {
@@ -453,9 +456,25 @@ impl Negamax {
                     self.update_history(turn, &mov, bonus);
                     self.store_killer_move(ply, mov);
 
-                    // history maluses
+                    // quiet history maluses
                     for q in &quiets_tried {
                         self.update_history(turn, q, -bonus);
+                    }
+                }
+                // store capture moves
+                else {
+                    let bonus = (depth * depth) as i32;
+                    if let Some(victim) = mov.capture() {
+                        self.capture_history[mov.role() as usize - 1][mov.to() as usize]
+                            [victim as usize - 1] += bonus;
+                    }
+
+                    // capture history maluses
+                    for c in &captures_tried {
+                        if let Some(victim) = c.capture() {
+                            self.capture_history[c.role() as usize - 1][c.to() as usize]
+                                [victim as usize - 1] -= bonus;
+                        }
                     }
                 }
 
@@ -464,6 +483,9 @@ impl Negamax {
 
             if is_quiet {
                 quiets_tried.push(mov);
+            }
+            else {
+                captures_tried.push(mov);
             }
         }
 
@@ -602,12 +624,16 @@ impl Negamax {
                 2_000_000_000 // Hash move is highest priority
             } else if let Some(victim) = m.capture() {
                 let mvv_lva = super::eval::MVV_LVA[victim as usize - 1][m.role() as usize - 1];
-                if !super::see::see(position, &m, 0) {
+                let base = if !super::see::see(position, &m, 0) {
                     -1_000_000_000 + mvv_lva // after quiets
                 } else {
                     above_0_see = Some(true);
                     1_000_000_000 + mvv_lva
-                }
+                };
+
+                let capture_history_score = self.capture_history[m.role() as usize - 1][m.to() as usize]
+                    [victim as usize - 1];
+                base + capture_history_score
             } else if killers.contains_move(m) {
                 1_000_000_000 // Same value as MVV-LVA so it's above bad captures but below good ones
             } else {
