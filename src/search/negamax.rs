@@ -699,7 +699,7 @@ impl Negamax {
 
     fn store_countermove(&mut self, m: Move, countermove: Move) {
         let Some(from_sq) = m.from() else {
-            return;
+            return; 
         };
         let from = usize::from(from_sq);
         let to = usize::from(m.to());
@@ -707,9 +707,7 @@ impl Negamax {
     }
 
     fn get_countermove(&self, m: Move) -> Option<Move> {
-        let Some(from_sq) = m.from() else {
-            return None;
-        };
+        let from_sq = m.from()?;
         let from = usize::from(from_sq);
         let to = usize::from(m.to());
         self.countermove_table[from][to]
