@@ -347,13 +347,6 @@ impl Negamax {
 
                 // SEE Pruning
                 if move_index > 0 && depth <= 6 {
-                    // minimum threshold is 0 anyway, if it already failed to pass it then no point continuing
-                    if let Some(passed) = passed_0see
-                        && !passed
-                    {
-                        continue;
-                    }
-
                     let depth = depth as i32;
 
                     let see_threshold = if is_quiet {
@@ -361,6 +354,14 @@ impl Negamax {
                     } else {
                         (-8 * depth * depth - 37 * depth + 10).min(0)
                     };
+
+                    // minimum threshold is 0 anyway, if it already failed to pass it then no point continuing
+                    if let Some(passed) = passed_0see
+                        && !passed
+                        && see_threshold == 0
+                    {
+                        continue;
+                    }
 
                     if !super::see::see(position, &mov, see_threshold) {
                         continue;
@@ -603,6 +604,7 @@ impl Negamax {
             } else if let Some(victim) = m.capture() {
                 let mvv_lva = super::eval::MVV_LVA[victim as usize - 1][m.role() as usize - 1];
                 if !super::see::see(position, &m, 0) {
+                    above_0_see = Some(false);
                     -1_000_000_000 + mvv_lva // after quiets
                 } else {
                     above_0_see = Some(true);
