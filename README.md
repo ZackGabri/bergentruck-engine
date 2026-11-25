@@ -3,17 +3,18 @@
 ## Overview
 
 Bergentruck (Bergentrück) is a Rust chess engine developed by ZackGabri and Tamplite Siphron Kents, the latter of whom developed the [Dragonrose chess engine](https://github.com/TampliteSK/dragonrose_cpp).
+Bergentruck currently supports standard chess, Chess960 / Fischer random chess (FRC), and double Fischer random chess (DFRC).
 
 ## Specifications
 
 ### Strength
 
-|  Version  | CCRL 2+1 | COPE All-Round Bullet | COPE All-Round Rapid |
-| :-------: | :------: | :-------------------: | :------------------: |
-|v0.4 (dev) |  ~3269   |           -           |           -          |          
-|   v0.3    |  ~3259   |      3133 +/- 11      |      3262 +/- 18     |
-|   v0.2    |  ~2434   |           -           |           -          |
-|   v0.1    |  ~1879   |           -           |           -          |
+|  Version  | CCRL 2+1 (Est.) | COPE All-Round Bullet | COPE All-Round Rapid | COPE DFRC All-Round Rapid |
+| :-------: | :-------------: | :-------------------: | :------------------: | :-----------------------: |
+|v0.4 (dev) |      ~3296      |           -           |           -          |             -             |
+|   v0.3    |      ~3259      |      3131 +/- 11      |      3262 +/- 18     |        3016 +/- 54        |
+|   v0.2    |      ~2434      |           -           |           -          |             -             |
+|   v0.1    |      ~1879      |           -           |           -          |             -             |
 
 - CCRL 2+1 are based on STC progtests against various versions of Stash.
 - COPE chess link: https://cope-chess.live/
@@ -23,19 +24,21 @@ Bergentruck (Bergentrück) is a Rust chess engine developed by ZackGabri and Tam
 Bergentruck uses [shakmaty crate](https://crates.io/crates/Shakmaty) for board representation and movegen, a library developed by Niklas Fiekas (niklasf) et al.
 
 ### Search
-
+- Iterative deepening
 - Negamax with Alpha-beta Pruning (fail-soft)
     - General heuristics: Improving
     - Reverse futility pruning (RFP)
     - Null move pruning (NMP)
-    - Futility pruning (FP) (commented)
     - Late move pruning (LMP)
+    - Internal iterative reduction (IIR)
     - Principal variation search (PVS)
+        - SEE Pruning
     - Late move reductions (LMR)
 - Quiescence search (fail-soft)
-- Transposition table
+    - SEE pruning
+- Transposition table (replacement scheme: always replace)
 
-- Move ordering: Hash move, MVV-LVA, quiet history moves, quiet moves
+- Move ordering: Hash move, MVV-LVA, killer moves, quiet history moves
 - Time management: Hard and soft time management
 
 ### Evaluation
@@ -71,6 +74,6 @@ Bergentruck is a reference to Undertale / Deltarune, both games developed by Tob
 
 ## Changelogs
 v0.4 (dev): More search progression. <br>
-v0.3: Add improving heuristics and fix bugs. Add NNUE and iterated on nets. <br>
+v0.3: Add improving heuristics and fix bugs. Add NNUE and iterated on nets. Add FRC / DFRC support (Chess960). <br>
 v0.2: Bugfixes and added more search enhancements up to IIR and soft time management. <br>
 v0.1: First release. Search progression up to NMP except aspiration windows.
