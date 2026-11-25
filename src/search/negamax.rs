@@ -464,17 +464,11 @@ impl Negamax {
                 // store capture moves
                 else {
                     let bonus = (depth * depth) as i32;
-                    if let Some(victim) = mov.capture() {
-                        self.capture_history[mov.role() as usize - 1][mov.to() as usize]
-                            [victim as usize - 1] += bonus;
-                    }
+                    self.update_capture_history(&mov, bonus);
 
                     // capture history maluses
                     for c in &captures_tried {
-                        if let Some(victim) = c.capture() {
-                            self.capture_history[c.role() as usize - 1][c.to() as usize]
-                                [victim as usize - 1] -= bonus;
-                        }
+                        self.update_capture_history(c, -bonus);
                     }
                 }
 
@@ -523,6 +517,19 @@ impl Negamax {
 
         let entry = &mut self.quiet_history[color as usize][from][to];
         *entry += clamped_bonus - *entry * clamped_bonus.abs() / max_history;
+    }
+
+    fn update_capture_history(&mut self, mov: &Move, bonus: i32) {
+        let max_history: i32 = 16384;
+
+        if let Some(victim) = mov.capture() {
+            let entry = &mut self.capture_history[mov.role() as usize - 1]
+                [mov.to() as usize][victim as usize - 1];
+
+            let clamped_bonus = bonus.clamp(-max_history, max_history);
+
+            *entry += clamped_bonus - *entry * clamped_bonus.abs() / max_history;
+        }
     }
 
     #[inline(always)]
