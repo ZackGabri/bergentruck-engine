@@ -408,7 +408,7 @@ impl Negamax {
                 if new_depth == 0 && !pv_node && !in_check && is_quiet && quiets_tried.len() >= 5 {
                     let history_score = self.quiet_history[turn as usize]
                         [mov.from().unwrap() as usize][mov.to() as usize];
-                    if history_score < -MAX_HISTORY / 512 {
+                    if history_score < -MAX_HISTORY / 256 {
                         continue;
                     }
                 }
