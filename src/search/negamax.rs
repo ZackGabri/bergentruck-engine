@@ -545,34 +545,51 @@ impl Negamax {
         }
 
         if ply >= MAX_PLY - 1 {
-            return self.static_eval(position, ply);
+            return static_eval;
         }
 
         if ply > self.seldepth {
             self.seldepth = ply;
         }
 
-        let mut best_value = static_eval;
-        if best_value >= beta {
-            return best_value;
-        }
-        if best_value > *alpha {
-            *alpha = best_value;
+        let in_check = position.is_check();
+
+        let mut best_value;
+        let mut moves;
+
+        if in_check {
+            // no stand pat while in check
+            best_value = -MATE_SCORE;
+            moves = position.legal_moves();
+
+            if moves.is_empty() {
+                return -MATE_SCORE + ply as i32; // checkmate
+            }
+        } else {
+            // stand pat
+            best_value = static_eval;
+            if best_value >= beta {
+                return best_value;
+            }
+            if best_value > *alpha {
+                *alpha = best_value;
+            }
+
+            moves = position.capture_moves();
         }
 
-        let mut captures = position.capture_moves();
-        self.sort_captures(&mut captures);
+        self.sort_captures(&mut moves);
 
-        for capture in captures {
+        for mov in moves {
             // SEE Pruning
-            if !super::see::see(position, &capture, 0) {
+            if !super::see::see(position, &mov, 0) {
                 continue;
             }
 
             let mut position = position.clone();
             self.accumulators[ply + 1] = self.accumulators[ply];
-            network::apply_move(&mut self.accumulators[ply + 1], &capture, position.turn());
-            position.play_unchecked(capture);
+            network::apply_move(&mut self.accumulators[ply + 1], &mov, position.turn());
+            position.play_unchecked(mov);
 
             let score = -self.quiescence(&position, &mut -beta, -*alpha, ply + 1);
             self.node_count += 1;
