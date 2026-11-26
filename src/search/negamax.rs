@@ -626,7 +626,7 @@ impl Negamax {
     }
 
     fn sort_captures(&self, moves: &mut MoveList) {
-        moves.sort_by_key(|m| {
+        moves.sort_unstable_by_key(|m| {
             if let Some(victim) = m.capture() {
                 -super::eval::MVV_LVA[victim as usize - 1][m.role() as usize - 1]
             } else {
