@@ -250,7 +250,7 @@ impl Negamax {
         if !in_check && !is_root {
             // reverse futility pruning
             let static_eval = *static_eval.get_or_insert(self.static_eval(position, ply));
-            if depth <= 4 {
+            if depth <= 4 && !pv_node {
                 let margin = if improving { 50 * depth } else { 80 * depth };
                 if static_eval >= beta + margin as i32 {
                     return static_eval;
