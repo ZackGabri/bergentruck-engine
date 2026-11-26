@@ -3,9 +3,9 @@
 use shakmaty::{Chess, Color, Position};
 
 /*
-* All of these table values are copied directly from PeSTO's Evaluation Function
-* Which are based on Pawel Koziol's implementation in TSCP by Tom Kerrigan
-*/
+ * All of these table values are copied directly from PeSTO's Evaluation Function
+ * Which are based on Pawel Koziol's implementation in TSCP by Tom Kerrigan
+ */
 
 const PAWN_VALUE_MIDDLEGAME: i32 = 82;
 const KNIGHT_VALUE_MIDDLEGAME: i32 = 337;

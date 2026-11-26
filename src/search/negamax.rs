@@ -108,8 +108,13 @@ pub struct Negamax {
     pub node_count: u64,
     pub repetition: RepetitionTable,
 
-    improving_table: [ImprovingStackEntry; MAX_PLY],
+    /// Usage: `quiet_history[color][from][to]`
     quiet_history: [[[i32; 64]; 64]; 2],
+    /// Usage: `cont_history[previous_piece][previous_to][current_piece][current_to]`
+    cont_history: Box<[[[[i32; 64]; 6]; 64]; 6]>,
+    move_stack: [Option<Move>; MAX_PLY],
+
+    improving_table: [ImprovingStackEntry; MAX_PLY],
     killer_move_table: [KillerMoves; MAX_PLY],
     accumulators: Box<[[network::Accumulator; 2]; MAX_PLY]>,
 
@@ -120,14 +125,21 @@ pub struct Negamax {
 }
 
 impl Negamax {
+    const MAX_HISTORY: i32 = 16_384;
+
     pub fn new() -> Self {
         Self {
             node_count: 0,
             repetition: RepetitionTable::new(),
-            improving_table: [ImprovingStackEntry::default(); MAX_PLY],
+
             quiet_history: [[[0; 64]; 64]; 2],
+            cont_history: Box::new([[[[0; 64]; 6]; 64]; 6]),
+            move_stack: [None; MAX_PLY],
+
+            improving_table: [ImprovingStackEntry::default(); MAX_PLY],
             killer_move_table: [KillerMoves::default(); MAX_PLY],
             accumulators: Box::new([[network::Accumulator::default(); 2]; MAX_PLY]),
+
             max_hard_nodes: None,
             hard_deadline: None,
             stop: Arc::default(),
@@ -376,6 +388,7 @@ impl Negamax {
 
             let mut position = position.clone();
             position.play_unchecked(mov);
+            self.move_stack[ply] = Some(mov);
 
             self.accumulators[ply + 1] = self.accumulators[ply];
             network::apply_move(&mut self.accumulators[ply + 1], &mov, turn);
@@ -456,12 +469,16 @@ impl Negamax {
                 // store quiet moves
                 if is_quiet {
                     let bonus = (depth * depth) as i32;
+                    let cont_bonus = bonus / 2;
+
                     self.update_history(turn, &mov, bonus);
+                    self.update_cont_history(ply, &mov, cont_bonus);
                     self.store_killer_move(ply, mov);
 
                     // history maluses
                     for q in &quiets_tried {
                         self.update_history(turn, q, -bonus);
+                        self.update_cont_history(ply, q, -cont_bonus);
                     }
                 }
 
@@ -497,16 +514,60 @@ impl Negamax {
         max
     }
 
-    fn update_history(&mut self, color: shakmaty::Color, mov: &Move, bonus: i32) {
-        let max_history: i32 = 16384;
+    #[inline(always)]
+    fn gravity(entry: &mut i32, bonus: i32) {
+        let clamped_bonus = bonus.clamp(-Self::MAX_HISTORY, Self::MAX_HISTORY);
 
+        *entry += clamped_bonus - *entry * clamped_bonus.abs() / Self::MAX_HISTORY;
+    }
+
+    #[inline(always)]
+    fn update_history(&mut self, color: shakmaty::Color, mov: &Move, bonus: i32) {
         let from = mov.from().unwrap() as usize;
         let to = mov.to() as usize;
 
-        let clamped_bonus = bonus.clamp(-max_history, max_history);
-
         let entry = &mut self.quiet_history[color as usize][from][to];
-        *entry += clamped_bonus - *entry * clamped_bonus.abs() / max_history;
+        Self::gravity(entry, bonus);
+    }
+
+    #[inline(always)]
+    fn update_cont_history(&mut self, ply: usize, mov: &Move, bonus: i32) {
+        if ply == 0 {
+            return;
+        }
+
+        let Some(prev) = self.move_stack[ply - 1] else {
+            return;
+        };
+
+        let prev_piece = prev.role() as usize - 1;
+        let prev_to = prev.to() as usize;
+
+        let cur_piece = mov.role() as usize - 1;
+        let cur_to = mov.to() as usize;
+
+        let entry = &mut self.cont_history[prev_piece][prev_to][cur_piece][cur_to];
+        Self::gravity(entry, bonus);
+    }
+
+    #[inline(always)]
+    fn history_score(&self, turn: usize, ply: usize, mov: &Move) -> i32 {
+        let from = mov.from().unwrap() as usize;
+        let to = mov.to() as usize;
+
+        let mut score = self.quiet_history[turn][from][to];
+
+        if ply > 0
+            && let Some(prev) = self.move_stack[ply - 1]
+        {
+            let prev_piece = prev.role() as usize - 1;
+            let prev_to = prev.to() as usize;
+            let cur_piece = mov.role() as usize - 1;
+
+            score += self.cont_history[prev_piece][prev_to][cur_piece][to];
+        }
+
+        score
     }
 
     #[inline(always)]
@@ -619,7 +680,7 @@ impl Negamax {
                 1_000_000_000 // Same value as MVV-LVA so it's above bad captures but below good ones
             } else {
                 // History moves
-                self.quiet_history[turn][m.from().unwrap() as usize][m.to() as usize]
+                self.history_score(turn, ply, &m)
             };
 
             scored.push((score, m, above_0_see));
