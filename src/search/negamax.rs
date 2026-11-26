@@ -150,6 +150,14 @@ impl Negamax {
             self.accumulators[0] = network::refresh(position);
         }
 
+        let in_check = position.is_check();
+        let is_root = ply == 0;
+
+        // check extension
+        if in_check {
+            depth += 1;
+        }
+
         if depth == 0 {
             return self.quiescence(position, &mut alpha, beta, ply);
         }
@@ -209,9 +217,6 @@ impl Negamax {
                 }
             }
         }
-
-        let in_check = position.is_check();
-        let is_root = ply == 0;
 
         let mut static_eval = if in_check {
             self.improving_table[ply].improving = false;
