@@ -355,15 +355,15 @@ impl Negamax {
                         (-8 * depth * depth - 37 * depth + 10).min(0)
                     };
 
-                    // minimum threshold is 0 anyway, if it already failed to pass it then no point continuing
-                    if let Some(passed) = passed_0see
-                        && !passed
-                        && see_threshold == 0
-                    {
-                        continue;
-                    }
+                    // we already know the result at threshold 0 for captures
+                    // passing at 0 implies passing at any threshold <= 0, so skip the call
+                    let passes = match passed_0see {
+                        Some(true) => true,
+                        Some(false) if see_threshold == 0 => false,
+                        _ => super::see::see(position, &mov, see_threshold),
+                    };
 
-                    if !super::see::see(position, &mov, see_threshold) {
+                    if !passes {
                         continue;
                     }
                 }
