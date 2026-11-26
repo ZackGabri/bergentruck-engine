@@ -258,7 +258,7 @@ impl Negamax {
             }
 
             // null move pruning
-            if depth >= 3 {
+            if depth >= 3 && !pv_node {
                 // Make sure it's not king and pawn endgame
                 let board = position.board();
                 let non_pawns = (board.by_color(turn) & (!board.pawns())) & (!board.kings());
