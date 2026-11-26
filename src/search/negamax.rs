@@ -247,7 +247,7 @@ impl Negamax {
         let turn = position.turn();
 
         // whole node pruning
-        if !in_check && !is_root {
+        if !in_check && !is_root && !pv_node {
             // reverse futility pruning
             let static_eval = *static_eval.get_or_insert(self.static_eval(position, ply));
             if depth <= 4 {
