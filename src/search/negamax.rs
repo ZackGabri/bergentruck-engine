@@ -677,7 +677,7 @@ impl Negamax {
                     1_000_000_000 + mvv_lva
                 }
             } else if killers.contains_move(m) {
-                1_000_000_000 // Same value as MVV-LVA so it's above bad captures but below good ones
+                900_000_000 // Same value as MVV-LVA so it's above bad captures but below good ones
             } else {
                 // History moves
                 self.history_score(turn, ply, &m)
