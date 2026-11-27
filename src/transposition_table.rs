@@ -99,16 +99,21 @@ impl TTable {
     #[inline(always)]
     pub fn put(&mut self, hash: TTHash, entry: TTEntry) {
         let index = self.get_index(&hash);
-        let old_entry = self.table[index];
-        
-        // No existing entry or hash collision
-        if old_entry.hash.0 == 0 || old_entry.hash != hash {
-            self.table[index] = entry;
-            return;
-        }
-        
-        // Overwrite older entries for same positions
-        if self.is_older(old_entry.generation) || entry.depth >= old_entry.depth {
+        let prev_entry = self.table[index];
+
+        let no_existing_entry = prev_entry.hash.0 == 0;
+        let is_hash_collision = prev_entry.hash != hash;
+        let is_older = self.is_older(prev_entry.generation);
+        let improves_bound = entry.bound == TTBound::Exact
+            && prev_entry.bound != TTBound::Exact
+            && entry.depth >= prev_entry.depth;
+
+        if no_existing_entry
+            || is_hash_collision
+            || is_older
+            || entry.depth.saturating_add(4) > prev_entry.depth
+            || improves_bound
+        {
             self.table[index] = entry;
         }
     }
@@ -158,7 +163,7 @@ impl TTable {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TTBound {
     Exact,
     Upper,
