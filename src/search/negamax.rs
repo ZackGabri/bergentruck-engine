@@ -190,7 +190,6 @@ impl Negamax {
 
         let tt_entry = transposition_table::get(hash);
         let tt_hit = tt_entry.hash == hash;
-        let replace_tt = tt_entry.depth < depth || !tt_hit;
 
         pv.length = 0; // ensure fresh pv
         // tt probing and cutoffs
@@ -473,26 +472,25 @@ impl Negamax {
             }
         }
 
-        if replace_tt {
-            let bound = if max <= original_alpha {
-                TTBound::Upper
-            } else if max >= beta {
-                TTBound::Lower
-            } else {
-                TTBound::Exact
-            };
+        let bound = if max <= original_alpha {
+            TTBound::Upper
+        } else if max >= beta {
+            TTBound::Lower
+        } else {
+            TTBound::Exact
+        };
 
-            transposition_table::put(
+        transposition_table::put(
+            hash,
+            TTEntry {
                 hash,
-                TTEntry {
-                    hash,
-                    depth,
-                    bound,
-                    best_move,
-                    score: max,
-                },
-            );
-        }
+                depth,
+                bound,
+                best_move,
+                score: max,
+                generation: transposition_table::get_age(),
+            },
+        );
 
         max
     }
