@@ -108,7 +108,7 @@ impl TTable {
         }
         
         // Overwrite older entries for same positions
-        if self.is_older(old_entry.generation) {
+        if self.is_older(old_entry.generation) || entry.depth >= old_entry.depth {
             self.table[index] = entry;
         }
     }
