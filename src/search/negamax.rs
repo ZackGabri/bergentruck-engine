@@ -171,7 +171,7 @@ impl Negamax {
         }
 
         if depth == 0 {
-            return self.quiescence(position, &mut alpha, beta, ply);
+            return self.quiescence(position, &mut alpha, beta, ply, pv_node);
         }
 
         if depth > 1 && self.has_reached_limit() {
@@ -202,7 +202,6 @@ impl Negamax {
 
         let tt_entry = transposition_table::get(hash);
         let tt_hit = tt_entry.hash == hash;
-        let replace_tt = tt_entry.depth < depth || !tt_hit;
 
         pv.length = 0; // ensure fresh pv
         // tt probing and cutoffs
@@ -490,26 +489,25 @@ impl Negamax {
             }
         }
 
-        if replace_tt {
-            let bound = if max <= original_alpha {
-                TTBound::Upper
-            } else if max >= beta {
-                TTBound::Lower
-            } else {
-                TTBound::Exact
-            };
+        let bound = if max <= original_alpha {
+            TTBound::Upper
+        } else if max >= beta {
+            TTBound::Lower
+        } else {
+            TTBound::Exact
+        };
 
-            transposition_table::put(
+        transposition_table::put(
+            hash,
+            TTEntry {
                 hash,
-                TTEntry {
-                    hash,
-                    depth,
-                    bound,
-                    best_move,
-                    score: max,
-                },
-            );
-        }
+                depth,
+                bound,
+                best_move,
+                score: max,
+                generation: transposition_table::get_age(),
+            },
+        );
 
         max
     }
@@ -598,7 +596,14 @@ impl Negamax {
         false
     }
 
-    fn quiescence(&mut self, position: &Chess, alpha: &mut i32, beta: i32, ply: usize) -> i32 {
+    fn quiescence(
+        &mut self,
+        position: &Chess,
+        alpha: &mut i32,
+        beta: i32,
+        ply: usize,
+        pv_node: bool,
+    ) -> i32 {
         let static_eval = self.static_eval(position, ply);
 
         if self.has_reached_limit() {
@@ -613,6 +618,22 @@ impl Negamax {
             self.seldepth = ply;
         }
 
+        let original_alpha = *alpha;
+
+        // TT probe
+        let hash = position.zobrist_hash(shakmaty::EnPassantMode::Legal);
+        let tt_entry = transposition_table::get(hash);
+        let tt_hit = tt_entry.hash == hash;
+
+        if tt_hit && !pv_node && tt_entry.score.abs() < MATE_THRESHOLD {
+            match tt_entry.bound {
+                TTBound::Exact => return tt_entry.score,
+                TTBound::Lower if tt_entry.score >= beta => return tt_entry.score,
+                TTBound::Upper if tt_entry.score <= *alpha => return tt_entry.score,
+                _ => {}
+            }
+        }
+
         let mut best_value = static_eval;
         if best_value >= beta {
             return best_value;
@@ -623,6 +644,8 @@ impl Negamax {
 
         let mut captures = position.capture_moves();
         self.sort_captures(&mut captures);
+
+        let mut best_move = None;
 
         for capture in captures {
             // SEE Pruning
@@ -635,19 +658,43 @@ impl Negamax {
             network::apply_move(&mut self.accumulators[ply + 1], &capture, position.turn());
             position.play_unchecked(capture);
 
-            let score = -self.quiescence(&position, &mut -beta, -*alpha, ply + 1);
+            let score = -self.quiescence(&position, &mut -beta, -*alpha, ply + 1, pv_node);
             self.node_count += 1;
 
-            if score >= beta {
-                return score;
-            }
             if score > best_value {
                 best_value = score;
+                best_move = Some(capture);
             }
+
             if score > *alpha {
                 *alpha = score;
             }
+
+            if score >= beta {
+                break;
+            }
         }
+
+        // TT store (depth 0 = quiescence)
+        let bound = if best_value <= original_alpha {
+            TTBound::Upper
+        } else if best_value >= beta {
+            TTBound::Lower
+        } else {
+            TTBound::Exact
+        };
+
+        transposition_table::put(
+            hash,
+            TTEntry {
+                hash,
+                depth: 0,
+                bound,
+                best_move,
+                score: best_value,
+                generation: transposition_table::get_age(),
+            },
+        );
 
         best_value
     }
