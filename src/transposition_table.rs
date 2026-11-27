@@ -41,6 +41,16 @@ pub fn clear() {
 }
 
 #[inline(always)]
+pub fn get_age() -> u8 {
+    unsafe { (*tt().0.get()).get_age() }
+}
+
+#[inline(always)]
+pub fn inc_age() {
+    unsafe { (*tt().0.get()).inc_age() }
+}
+
+#[inline(always)]
 pub fn resize() {
     let new_size = crate::engine_options().get_number("Hash");
     unsafe {
@@ -55,6 +65,7 @@ pub type TTHash = Zobrist64;
 pub struct TTable {
     table: Box<[TTEntry]>,
     length: usize,
+    generation: u8,
 }
 
 impl TTable {
@@ -66,6 +77,7 @@ impl TTable {
         Self {
             table: vec![TTEntry::default(); table_length].into_boxed_slice(),
             length: table_length,
+            generation: 0,
         }
     }
 
@@ -75,8 +87,35 @@ impl TTable {
     }
 
     #[inline(always)]
+    pub fn get_age(&self) -> u8 {
+        self.generation
+    }
+
+    #[inline(always)]
+    fn is_older(&self, entry_age: u8) -> bool {
+        self.generation.wrapping_sub(entry_age) > 0
+    }
+
+    #[inline(always)]
     pub fn put(&mut self, hash: TTHash, entry: TTEntry) {
-        self.table[self.get_index(&hash)] = entry;
+        let index = self.get_index(&hash);
+        let old_entry = self.table[index];
+        
+        // No existing entry or hash collision
+        if old_entry.hash.0 == 0 || old_entry.hash != hash {
+            self.table[index] = entry;
+            return;
+        }
+        
+        // Overwrite older entries for same positions
+        if self.is_older(old_entry.generation) {
+            self.table[index] = entry;
+        }
+    }
+
+    #[inline(always)]
+    pub fn inc_age(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
     }
 
     #[inline(always)]
@@ -133,6 +172,7 @@ pub struct TTEntry {
     pub depth: usize,
     pub score: i32,
     pub best_move: Option<shakmaty::Move>,
+    pub generation: u8,
 }
 
 impl Default for TTEntry {
@@ -143,6 +183,7 @@ impl Default for TTEntry {
             bound: TTBound::Exact,
             best_move: None,
             score: -MATE_SCORE,
+            generation: 0,
         }
     }
 }

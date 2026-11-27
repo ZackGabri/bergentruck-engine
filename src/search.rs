@@ -97,6 +97,8 @@ pub fn search(
     negamax.hard_deadline = hard_deadline;
     negamax.stop = stop;
 
+    transposition_table::inc_age();
+
     let max_depth = max_depth.unwrap_or_else(|| {
         if infinite || max_hard_nodes.is_some() || hard_deadline.is_some() {
             100

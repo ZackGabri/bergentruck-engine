@@ -490,6 +490,7 @@ impl Negamax {
                     bound,
                     best_move,
                     score: max,
+                    generation: transposition_table::get_age(),
                 },
             );
         }
