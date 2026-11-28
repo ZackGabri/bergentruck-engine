@@ -110,8 +110,8 @@ pub struct Negamax {
 
     /// Usage: `quiet_history[color][from][to]`
     quiet_history: [[[i32; 64]; 64]; 2],
-    /// Usage: `cont_history[previous_piece][previous_to][current_piece][current_to]`
-    cont_history: Box<[[[[i32; 64]; 6]; 64]; 6]>,
+    /// Usage: `cont_history[color][previous_piece][previous_to][current_piece][current_to]`
+    cont_history: Box<[[[[[i32; 64]; 6]; 64]; 6]; 2]>,
     move_stack: [Option<Move>; MAX_PLY],
 
     improving_table: [ImprovingStackEntry; MAX_PLY],
@@ -133,7 +133,7 @@ impl Negamax {
             repetition: RepetitionTable::new(),
 
             quiet_history: [[[0; 64]; 64]; 2],
-            cont_history: Box::new([[[[0; 64]; 6]; 64]; 6]),
+            cont_history: unsafe { Box::new_zeroed().assume_init() },
             move_stack: [None; MAX_PLY],
 
             improving_table: [ImprovingStackEntry::default(); MAX_PLY],
@@ -275,6 +275,8 @@ impl Negamax {
                 let non_pawns = (board.by_color(turn) & (!board.pawns())) & (!board.kings());
 
                 if non_pawns.any() && static_eval >= beta {
+                    self.move_stack[ply] = None;
+
                     let null_position = position.clone().swap_turn().unwrap();
                     self.accumulators[ply + 1] = self.accumulators[ply];
                     // Ethereal tech to scale NMP reduction based on eval - beta.
@@ -471,13 +473,13 @@ impl Negamax {
                     let cont_bonus = bonus / 2;
 
                     self.update_history(turn, &mov, bonus);
-                    self.update_cont_history(ply, &mov, cont_bonus);
+                    self.update_cont_history(turn, ply, &mov, cont_bonus);
                     self.store_killer_move(ply, mov);
 
                     // history maluses
                     for q in &quiets_tried {
                         self.update_history(turn, q, -bonus);
-                        self.update_cont_history(ply, q, -cont_bonus);
+                        self.update_cont_history(turn, ply, q, -cont_bonus);
                     }
                 }
 
@@ -529,7 +531,7 @@ impl Negamax {
     }
 
     #[inline(always)]
-    fn update_cont_history(&mut self, ply: usize, mov: &Move, bonus: i32) {
+    fn update_cont_history(&mut self, color: shakmaty::Color, ply: usize, mov: &Move, bonus: i32) {
         if ply == 0 {
             return;
         }
@@ -544,7 +546,7 @@ impl Negamax {
         let cur_piece = mov.role() as usize - 1;
         let cur_to = mov.to() as usize;
 
-        let entry = &mut self.cont_history[prev_piece][prev_to][cur_piece][cur_to];
+        let entry = &mut self.cont_history[color as usize][prev_piece][prev_to][cur_piece][cur_to];
         Self::gravity(entry, bonus);
     }
 
@@ -562,7 +564,7 @@ impl Negamax {
             let prev_to = prev.to() as usize;
             let cur_piece = mov.role() as usize - 1;
 
-            score += self.cont_history[prev_piece][prev_to][cur_piece][to];
+            score += self.cont_history[turn][prev_piece][prev_to][cur_piece][to];
         }
 
         score
