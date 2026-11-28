@@ -259,8 +259,20 @@ impl Negamax {
 
         // whole node pruning
         if !in_check && !is_root {
-            // reverse futility pruning
             let static_eval = *static_eval.get_or_insert(self.static_eval(position, ply));
+
+            // razoring
+            if depth <= 7 && !pv_node {
+                let margin = 322 * (depth as i32);
+                if static_eval + margin < alpha {
+                    let razor_score = self.quiescence(position, &mut alpha, beta, ply,false);
+                    if razor_score <= alpha {
+                        return razor_score;
+                    }
+                }
+            }
+
+            // reverse futility pruning
             if depth <= 4 {
                 let margin = if improving { 50 * depth } else { 80 * depth };
                 if static_eval >= beta + margin as i32 {
