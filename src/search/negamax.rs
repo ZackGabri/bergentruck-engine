@@ -9,7 +9,7 @@ use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
 
 const MAX_HISTORY: i32 = 16_384;
-const CONT_HISTORY_PLIES: [usize; 2] = [1, 2];
+const CONT_HISTORY_PLIES: [usize; 3] = [1, 2, 4];
 const CONT_HISTORY_SIZE: usize = CONT_HISTORY_PLIES.len();
 
 pub struct PVariation {
