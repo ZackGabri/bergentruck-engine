@@ -473,7 +473,7 @@ impl Negamax {
                 // store quiet moves
                 if is_quiet {
                     let bonus = (depth * depth) as i32;
-                    let cont_bonus = bonus / 2;
+                    let cont_bonus = (150 * depth - 125) as i32;
 
                     self.update_history(turn, &mov, bonus);
                     self.update_cont_history(turn, ply, &mov, cont_bonus);
