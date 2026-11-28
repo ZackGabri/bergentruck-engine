@@ -566,7 +566,7 @@ impl Negamax {
 
             let entry =
                 &mut self.cont_history[index][color][prev_piece][prev_to][cur_piece][cur_to];
-            Self::gravity(entry, bonus);
+            Self::gravity(entry, bonus / offset as i32);
         }
     }
 
