@@ -385,6 +385,14 @@ impl Negamax {
                         continue;
                     }
                 }
+                
+                // History pruning
+                if is_quiet {
+                    let history = self.history_score(position.turn() as usize, ply, &mov);
+                    if history < -4346 * depth as i32 / 1024 {
+                        continue;
+                    }
+                }
             }
 
             let mut position = position.clone();
