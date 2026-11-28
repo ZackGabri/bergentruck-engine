@@ -116,7 +116,7 @@ pub struct Negamax {
     quiet_history: [[[i32; 64]; 64]; 2],
     /// Usage: `cont_history[index][color][previous_piece][previous_to][current_piece][current_to]`
     /// index = `(offset & 1 == 0) as usize`
-    cont_history: Box<[[[[[[i32; 64]; 6]; 64]; 6]; 2]; 2]>,
+    cont_history: Box<[[[[[i32; 64]; 6]; 64]; 6]; 2]>,
     move_stack: [Option<Move>; MAX_PLY],
 
     improving_table: [ImprovingStackEntry; MAX_PLY],
@@ -546,10 +546,9 @@ impl Negamax {
     }
 
     #[inline(always)]
-    fn update_cont_history(&mut self, color: shakmaty::Color, ply: usize, mov: &Move, bonus: i32) {
+    fn update_cont_history(&mut self, _color: shakmaty::Color, ply: usize, mov: &Move, bonus: i32) {
         let cur_piece = mov.role() as usize - 1;
         let cur_to = mov.to() as usize;
-        let color = color as usize;
 
         for &offset in CONT_HISTORY_PLIES.iter() {
             if ply < offset {
@@ -565,7 +564,7 @@ impl Negamax {
             let index = (offset & 1 == 0) as usize;
 
             let entry =
-                &mut self.cont_history[index][color][prev_piece][prev_to][cur_piece][cur_to];
+                &mut self.cont_history[index][prev_piece][prev_to][cur_piece][cur_to];
             Self::gravity(entry, bonus);
         }
     }
@@ -591,7 +590,7 @@ impl Negamax {
             let prev_to = prev.to() as usize;
             let index = (offset & 1 == 0) as usize;
 
-            score += self.cont_history[index][turn][prev_piece][prev_to][cur_piece][to];
+            score += self.cont_history[index][prev_piece][prev_to][cur_piece][to];
         }
 
         score
