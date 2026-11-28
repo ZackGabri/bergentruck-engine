@@ -389,7 +389,9 @@ impl Negamax {
                 // History pruning
                 if is_quiet {
                     let history = self.history_score(position.turn() as usize, ply, &mov);
-                    if history < -4346 * depth as i32 / 1024 {
+                    let threshold = -4346 * 4 * depth as i32 / 1024;
+                    if history < threshold {
+                        // println!("Pruning moves: {mov}. History {history} < Threshold: {threshold}");
                         continue;
                     }
                 }
