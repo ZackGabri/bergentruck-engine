@@ -10,7 +10,7 @@ use crate::transposition_table::{self, TTBound, TTEntry};
 
 const MAX_HISTORY: i32 = 16_384;
 const CONT_HISTORY_PLIES: [usize; 3] = [1, 2, 4];
-const CONT_HISTORY_SIZE: usize = CONT_HISTORY_PLIES.len();
+const _CONT_HISTORY_SIZE: usize = CONT_HISTORY_PLIES.len();
 
 pub struct PVariation {
     pub length: usize,
@@ -114,9 +114,9 @@ pub struct Negamax {
 
     /// Usage: `quiet_history[color][from][to]`
     quiet_history: [[[i32; 64]; 64]; 2],
-    /// Usage: `cont_history[ply][color][previous_piece][previous_to][current_piece][current_to]`
-    /// index
-    cont_history: Box<[[[[[[i32; 64]; 6]; 64]; 6]; 2]; CONT_HISTORY_SIZE]>,
+    /// Usage: `cont_history[index][color][previous_piece][previous_to][current_piece][current_to]`
+    /// index = `(offset & 1 == 0) as usize`
+    cont_history: Box<[[[[[[i32; 64]; 6]; 64]; 6]; 2]; 2]>,
     move_stack: [Option<Move>; MAX_PLY],
 
     improving_table: [ImprovingStackEntry; MAX_PLY],
@@ -268,7 +268,7 @@ impl Negamax {
             if depth <= 7 && !pv_node {
                 let margin = 322 * (depth as i32);
                 if static_eval + margin < alpha {
-                    let razor_score = self.quiescence(position, &mut alpha, beta, ply,false);
+                    let razor_score = self.quiescence(position, &mut alpha, beta, ply, false);
                     if razor_score <= alpha {
                         return razor_score;
                     }
@@ -551,7 +551,7 @@ impl Negamax {
         let cur_to = mov.to() as usize;
         let color = color as usize;
 
-        for (i, &offset) in CONT_HISTORY_PLIES.iter().enumerate() {
+        for &offset in CONT_HISTORY_PLIES.iter() {
             if ply < offset {
                 continue;
             }
@@ -562,8 +562,10 @@ impl Negamax {
 
             let prev_piece = prev.role() as usize - 1;
             let prev_to = prev.to() as usize;
+            let index = (offset & 1 == 0) as usize;
 
-            let entry = &mut self.cont_history[i][color][prev_piece][prev_to][cur_piece][cur_to];
+            let entry =
+                &mut self.cont_history[index][color][prev_piece][prev_to][cur_piece][cur_to];
             Self::gravity(entry, bonus);
         }
     }
@@ -576,7 +578,7 @@ impl Negamax {
 
         let mut score = self.quiet_history[turn][from][to];
 
-        for (i, &offset) in CONT_HISTORY_PLIES.iter().enumerate() {
+        for &offset in CONT_HISTORY_PLIES.iter() {
             if ply < offset {
                 continue;
             }
@@ -587,8 +589,9 @@ impl Negamax {
 
             let prev_piece = prev.role() as usize - 1;
             let prev_to = prev.to() as usize;
+            let index = (offset & 1 == 0) as usize;
 
-            score += self.cont_history[i][turn][prev_piece][prev_to][cur_piece][to];
+            score += self.cont_history[index][turn][prev_piece][prev_to][cur_piece][to];
         }
 
         score
