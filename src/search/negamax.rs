@@ -8,6 +8,10 @@ use crate::search::repetition::RepetitionTable;
 use crate::search::{MATE_SCORE, MATE_THRESHOLD, MAX_PLY};
 use crate::transposition_table::{self, TTBound, TTEntry};
 
+const MAX_HISTORY: i32 = 16_384;
+const CONT_HISTORY_PLIES: [usize; 2] = [1, 2];
+const CONT_HISTORY_SIZE: usize = CONT_HISTORY_PLIES.len();
+
 pub struct PVariation {
     pub length: usize,
     pub line: [Option<Move>; MAX_PLY],
@@ -110,8 +114,9 @@ pub struct Negamax {
 
     /// Usage: `quiet_history[color][from][to]`
     quiet_history: [[[i32; 64]; 64]; 2],
-    /// Usage: `cont_history[color][previous_piece][previous_to][current_piece][current_to]`
-    cont_history: Box<[[[[[i32; 64]; 6]; 64]; 6]; 2]>,
+    /// Usage: `cont_history[ply][color][previous_piece][previous_to][current_piece][current_to]`
+    /// index
+    cont_history: Box<[[[[[[i32; 64]; 6]; 64]; 6]; 2]; CONT_HISTORY_SIZE]>,
     move_stack: [Option<Move>; MAX_PLY],
 
     improving_table: [ImprovingStackEntry; MAX_PLY],
@@ -125,8 +130,6 @@ pub struct Negamax {
 }
 
 impl Negamax {
-    const MAX_HISTORY: i32 = 16_384;
-
     pub fn new() -> Self {
         Self {
             node_count: 0,
@@ -482,7 +485,7 @@ impl Negamax {
                 // store quiet moves
                 if is_quiet {
                     let bonus = (depth * depth) as i32;
-                    let cont_bonus = bonus / 2;
+                    let cont_bonus = (150 * depth - 125) as i32;
 
                     self.update_history(turn, &mov, bonus);
                     self.update_cont_history(turn, ply, &mov, cont_bonus);
@@ -528,9 +531,9 @@ impl Negamax {
 
     #[inline(always)]
     fn gravity(entry: &mut i32, bonus: i32) {
-        let clamped_bonus = bonus.clamp(-Self::MAX_HISTORY, Self::MAX_HISTORY);
+        let clamped_bonus = bonus.clamp(-MAX_HISTORY, MAX_HISTORY);
 
-        *entry += clamped_bonus - *entry * clamped_bonus.abs() / Self::MAX_HISTORY;
+        *entry += clamped_bonus - *entry * clamped_bonus.abs() / MAX_HISTORY;
     }
 
     #[inline(always)]
@@ -544,39 +547,48 @@ impl Negamax {
 
     #[inline(always)]
     fn update_cont_history(&mut self, color: shakmaty::Color, ply: usize, mov: &Move, bonus: i32) {
-        if ply == 0 {
-            return;
-        }
-
-        let Some(prev) = self.move_stack[ply - 1] else {
-            return;
-        };
-
-        let prev_piece = prev.role() as usize - 1;
-        let prev_to = prev.to() as usize;
-
         let cur_piece = mov.role() as usize - 1;
         let cur_to = mov.to() as usize;
+        let color = color as usize;
 
-        let entry = &mut self.cont_history[color as usize][prev_piece][prev_to][cur_piece][cur_to];
-        Self::gravity(entry, bonus);
+        for (i, &offset) in CONT_HISTORY_PLIES.iter().enumerate() {
+            if ply < offset {
+                continue;
+            }
+
+            let Some(prev) = self.move_stack[ply - offset] else {
+                continue;
+            };
+
+            let prev_piece = prev.role() as usize - 1;
+            let prev_to = prev.to() as usize;
+
+            let entry = &mut self.cont_history[i][color][prev_piece][prev_to][cur_piece][cur_to];
+            Self::gravity(entry, bonus);
+        }
     }
 
     #[inline(always)]
     fn history_score(&self, turn: usize, ply: usize, mov: &Move) -> i32 {
         let from = mov.from().unwrap() as usize;
         let to = mov.to() as usize;
+        let cur_piece = mov.role() as usize - 1;
 
         let mut score = self.quiet_history[turn][from][to];
 
-        if ply > 0
-            && let Some(prev) = self.move_stack[ply - 1]
-        {
+        for (i, &offset) in CONT_HISTORY_PLIES.iter().enumerate() {
+            if ply < offset {
+                continue;
+            }
+
+            let Some(prev) = self.move_stack[ply - offset] else {
+                continue;
+            };
+
             let prev_piece = prev.role() as usize - 1;
             let prev_to = prev.to() as usize;
-            let cur_piece = mov.role() as usize - 1;
 
-            score += self.cont_history[turn][prev_piece][prev_to][cur_piece][to];
+            score += self.cont_history[i][turn][prev_piece][prev_to][cur_piece][to];
         }
 
         score
